@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a0a"/>
+      <stop offset="100%" style="stop-color:#1a1a1a"/>
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00ff41"/>
+      <stop offset="100%" style="stop-color:#00cc33"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="48" fill="url(#bgGrad)" stroke="#00ff41" stroke-width="2"/>
+  <!-- Process tree visualization -->
+  <g fill="none" stroke="url(#greenGrad)" stroke-width="2.5" filter="url(#glow)" stroke-linecap="round">
+    <!-- Main trunk -->
+    <path d="M50 22 L50 78"/>
+    <!-- Root node -->
+    <circle cx="50" cy="22" r="5" fill="#00ff41"/>
+    <!-- Level 1 branches -->
+    <path d="M50 35 L30 45"/>
+    <path d="M50 35 L70 45"/>
+    <!-- Level 1 nodes -->
+    <circle cx="30" cy="45" r="4" fill="#00ff41"/>
+    <circle cx="70" cy="45" r="4" fill="#00ff41"/>
+    <!-- Level 2 branches -->
+    <path d="M30 45 L20 60"/>
+    <path d="M30 45 L40 60"/>
+    <path d="M70 45 L60 60"/>
+    <path d="M70 45 L80 60"/>
+    <!-- Level 2 nodes -->
+    <circle cx="20" cy="60" r="3" fill="#00cc33"/>
+    <circle cx="40" cy="60" r="3" fill="#00cc33"/>
+    <circle cx="60" cy="60" r="3" fill="#00cc33"/>
+    <circle cx="80" cy="60" r="3" fill="#00cc33"/>
+    <!-- Leaf nodes -->
+    <circle cx="50" cy="78" r="4" fill="#00ff41"/>
+  </g>
+  <!-- Walking figure silhouette -->
+  <g fill="#00ff41" opacity="0.3">
+    <circle cx="50" cy="50" r="3"/>
+  </g>
+</svg>

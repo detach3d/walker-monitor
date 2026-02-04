@@ -1,0 +1,222 @@
+.fdt-view {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.view-meta {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.process-count {
+    font-size: 14px;
+    color: var(--accent-green-secondary);
+    font-weight: 500;
+}
+
+.fdt-container {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-right: 8px;
+}
+
+/* FDT Card */
+.fdt-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: all var(--transition-fast);
+}
+
+.fdt-card:hover {
+    border-color: var(--accent-green-dark);
+}
+
+.fdt-card.expanded {
+    border-color: var(--accent-green-tertiary);
+    box-shadow: 0 4px 20px rgba(0, 255, 65, 0.1);
+}
+
+.fdt-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    cursor: pointer;
+    background: var(--bg-tertiary);
+    transition: background var(--transition-fast);
+}
+
+.fdt-card-header:hover {
+    background: rgba(0, 255, 65, 0.05);
+}
+
+.fdt-card-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.fdt-card-right {
+    display: flex;
+    align-items: center;
+}
+
+.process-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.process-pid {
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--accent-green-secondary);
+    background: var(--bg-secondary);
+    padding: 4px 10px;
+    border-radius: 4px;
+    min-width: 60px;
+    text-align: center;
+}
+
+.process-comm {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.fd-count-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(0, 255, 65, 0.1);
+    border: 1px solid var(--accent-green-dark);
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent-green-primary);
+}
+
+.badge-icon {
+    font-size: 12px;
+}
+
+/* FD Table */
+.fd-table-container {
+    padding: 12px 16px 16px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border-color);
+}
+
+.fd-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.fd-table thead {
+    position: sticky;
+    top: 0;
+    background: var(--bg-tertiary);
+}
+
+.fd-table th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.fd-col-num {
+    width: 80px;
+}
+
+.fd-col-path {
+    width: auto;
+}
+
+.fd-row {
+    transition: background var(--transition-fast);
+}
+
+.fd-row:hover {
+    background: rgba(0, 255, 65, 0.03);
+}
+
+.fd-row td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    vertical-align: middle;
+}
+
+.fd-num {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+    color: var(--accent-green-tertiary);
+}
+
+.fd-icon {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.fd-icon.special {
+    color: var(--accent-green-secondary);
+}
+
+.fd-path {
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    color: var(--text-secondary);
+    word-break: break-all;
+}
+
+/* No FDs state */
+.no-fds {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 24px;
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+.no-fds-icon {
+    font-size: 18px;
+    opacity: 0.5;
+}
+
+/* Expand button */
+.expand-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color var(--transition-fast);
+}
+
+.expand-btn:hover {
+    color: var(--accent-green-primary);
+}

@@ -1,0 +1,97 @@
+.process-tree-modal {
+    max-width: 700px;
+}
+
+.tree-section {
+    margin-bottom: 30px;
+}
+
+.tree-section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent-green-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tree-chain {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tree-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.tree-arrow {
+    color: var(--accent-green-tertiary);
+    font-size: 18px;
+    width: 24px;
+    text-align: center;
+}
+
+.tree-node {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    transition: all var(--transition-fast);
+}
+
+.tree-node:hover {
+    border-color: var(--accent-green-dark);
+    background: rgba(0, 255, 65, 0.05);
+}
+
+.tree-current {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: rgba(0, 255, 65, 0.15);
+    border: 2px solid var(--accent-green-tertiary);
+    border-radius: 8px;
+    box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+}
+
+.tree-pid {
+    font-family: 'Courier New', monospace;
+    font-weight: 600;
+    color: var(--accent-green-secondary);
+    padding: 4px 8px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.tree-pid.highlighted {
+    color: var(--accent-green-primary);
+    background: var(--bg-primary);
+    font-size: 15px;
+}
+
+.tree-comm {
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.tree-comm.highlighted {
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.tree-children {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+}

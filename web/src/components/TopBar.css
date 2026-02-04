@@ -1,0 +1,76 @@
+.topbar {
+    position: fixed;
+    top: 0;
+    left: var(--sidebar-width);
+    right: 0;
+    height: var(--topbar-height);
+    background: rgba(18, 18, 18, 0.8);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    z-index: 90;
+}
+
+.topbar-section {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.host-selector-wrapper {
+    position: relative;
+    min-width: 250px;
+}
+
+.host-selector {
+    width: 100%;
+    padding-right: 36px;
+    appearance: none;
+    cursor: pointer;
+}
+
+.selector-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    color: var(--text-tertiary);
+}
+
+.host-status {
+    padding-left: 16px;
+    border-left: 1px solid var(--border-color);
+}
+
+.search-box {
+    position: relative;
+    width: 300px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-tertiary);
+    font-size: 16px;
+}
+
+.search-input {
+    width: 100%;
+    padding-left: 40px;
+}
+
+button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+button:disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
