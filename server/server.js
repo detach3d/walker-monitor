@@ -90,6 +90,7 @@ app.get('/api/hosts', (req, res) => {
     const hostList = Array.from(hosts.entries()).map(([name, host]) => ({
         name,
         url: host.url,
+        apiKeyConfigured: Boolean(host.apiKey),
         status: host.status,
         lastSeen: host.lastSeen,
         lastSnapshot: host.lastSnapshot,
@@ -145,6 +146,60 @@ app.post('/api/hosts', async (req, res) => {
 });
 
 /**
+ * PUT /api/hosts/:hostname
+ * Update host settings
+ * Body: { name, url, apiKey? }
+ */
+app.put('/api/hosts/:hostname', async (req, res) => {
+    const { hostname } = req.params;
+    const { name, url, apiKey } = req.body;
+
+    const host = hosts.get(hostname);
+    if (!host) {
+        return res.status(404).json({ error: 'Host not found' });
+    }
+
+    const nextName = (name ?? hostname).trim();
+    const nextUrl = (url ?? host.url).trim().replace(/\/$/, '');
+
+    if (!nextName || !nextUrl) {
+        return res.status(400).json({ error: 'Name and URL are required' });
+    }
+
+    if (nextName !== hostname && hosts.has(nextName)) {
+        return res.status(409).json({ error: 'Host with this name already exists' });
+    }
+
+    const nextApiKey = typeof apiKey === 'undefined' ? host.apiKey : (apiKey || null);
+
+    const updatedHost = {
+        ...host,
+        name: nextName,
+        url: nextUrl,
+        apiKey: nextApiKey
+    };
+
+    if (nextName !== hostname) {
+        hosts.delete(hostname);
+    }
+    hosts.set(nextName, updatedHost);
+
+    const healthCheck = await fetchFromAgent(updatedHost, '/health');
+
+    res.json({
+        message: 'Host updated successfully',
+        previousName: hostname,
+        host: {
+            name: nextName,
+            url: updatedHost.url,
+            apiKeyConfigured: Boolean(updatedHost.apiKey),
+            status: updatedHost.status,
+            healthy: healthCheck.success
+        }
+    });
+});
+
+/**
  * DELETE /api/hosts/:hostname
  * Remove a host
  */
@@ -175,6 +230,7 @@ app.get('/api/hosts/:hostname/info', (req, res) => {
     res.json({
         name: hostname,
         url: host.url,
+        apiKeyConfigured: Boolean(host.apiKey),
         status: host.status,
         lastSeen: host.lastSeen,
         lastSnapshot: host.lastSnapshot,
@@ -269,6 +325,27 @@ app.get('/api/hosts/:hostname/cpu', async (req, res) => {
 });
 
 /**
+ * GET /api/hosts/:hostname/network
+ * Get socket info from host
+ */
+app.get('/api/hosts/:hostname/network', async (req, res) => {
+    const { hostname } = req.params;
+
+    const host = hosts.get(hostname);
+    if (!host) {
+        return res.status(404).json({ error: 'Host not found' });
+    }
+
+    const result = await fetchFromAgent(host, '/network');
+
+    if (!result.success) {
+        return res.status(503).json({ error: result.error });
+    }
+
+    res.json(result.data);
+});
+
+/**
  * GET /api/hosts/:hostname/refresh
  * Trigger fresh snapshot on host
  */
@@ -287,6 +364,48 @@ app.get('/api/hosts/:hostname/refresh', async (req, res) => {
     }
 
     host.lastSnapshot = new Date();
+
+    res.json(result.data);
+});
+
+/**
+ * GET /api/hosts/:hostname/tree
+ * Get full process tree (parents/children)
+ */
+app.get('/api/hosts/:hostname/tree', async (req, res) => {
+    const { hostname } = req.params;
+
+    const host = hosts.get(hostname);
+    if (!host) {
+        return res.status(404).json({ error: 'Host not found' });
+    }
+
+    const result = await fetchFromAgent(host, '/tree');
+
+    if (!result.success) {
+        return res.status(503).json({ error: result.error });
+    }
+
+    res.json(result.data);
+});
+
+/**
+ * GET /api/hosts/:hostname/tree/:pid
+ * Get process tree (parents/children) for a specific PID
+ */
+app.get('/api/hosts/:hostname/tree/:pid', async (req, res) => {
+    const { hostname, pid } = req.params;
+
+    const host = hosts.get(hostname);
+    if (!host) {
+        return res.status(404).json({ error: 'Host not found' });
+    }
+
+    const result = await fetchFromAgent(host, `/tree/${pid}`);
+
+    if (!result.success) {
+        return res.status(503).json({ error: result.error });
+    }
 
     res.json(result.data);
 });

@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import { FiChevronDown, FiChevronRight, FiGitBranch } from 'react-icons/fi';
 import ProcessTreeModal from '../components/ProcessTreeModal';
+import { api } from '../api/client';
 import './ProcessesView.css';
 
-const ProcessesView = ({ snapshotData, psData, searchQuery }) => {
+const ProcessesView = ({ snapshotData, threadsData, searchQuery, hostname }) => {
     const [expandedProcesses, setExpandedProcesses] = useState(new Set());
-    const [showDiff, setShowDiff] = useState(false);
     const [selectedProcess, setSelectedProcess] = useState(null);
+    const [treeData, setTreeData] = useState(null);
+    const [treeLoading, setTreeLoading] = useState(false);
+    const [treeError, setTreeError] = useState(null);
 
-    if (!snapshotData || !psData) {
+    if (!snapshotData) {
         return (
             <div className="empty-state">
                 <div className="empty-state-icon">🔍</div>
@@ -21,155 +24,131 @@ const ProcessesView = ({ snapshotData, psData, searchQuery }) => {
     }
 
     const toggleExpand = (pid) => {
-        const newExpanded = new Set(expandedProcesses);
-        if (newExpanded.has(pid)) {
-            newExpanded.delete(pid);
+        const next = new Set(expandedProcesses);
+        if (next.has(pid)) {
+            next.delete(pid);
         } else {
-            newExpanded.add(pid);
+            next.add(pid);
         }
-        setExpandedProcesses(newExpanded);
+        setExpandedProcesses(next);
     };
 
-    const filterProcesses = (processes) => {
-        if (!searchQuery) return processes;
-        return processes.filter(p =>
-            p.pid.toString().includes(searchQuery) ||
-            p.comm.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-    };
-
-    // Create a map of PID -> threads from psData (which uses walker -t)
     const threadMap = new Map();
-    (psData.processes || []).forEach(proc => {
+    (threadsData?.processes || []).forEach((proc) => {
         threadMap.set(proc.pid, proc.threads || []);
     });
 
-    // Merge thread data into snapshot processes for the Walker Snapshot column
-    const snapshotProcessesWithThreads = (snapshotData.processes || []).map(proc => ({
-        ...proc,
-        threads: threadMap.get(proc.pid) || []
-    }));
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const processes = (snapshotData.processes || [])
+        .filter((proc) => {
+            const threads = threadMap.get(proc.pid) || [];
+            if (!normalizedQuery) return true;
+            if (
+                proc.pid.toString().includes(normalizedQuery) ||
+                proc.comm.toLowerCase().includes(normalizedQuery)
+            ) {
+                return true;
+            }
+            return threads.some((thread) =>
+                String(thread.tid).includes(normalizedQuery) ||
+                (thread.comm || '').toLowerCase().includes(normalizedQuery)
+            );
+        })
+        .sort((a, b) => {
+            const threadDiff = (threadMap.get(b.pid)?.length || 0) - (threadMap.get(a.pid)?.length || 0);
+            if (threadDiff !== 0) return threadDiff;
+            return a.pid - b.pid;
+        });
 
-    const snapshotProcesses = filterProcesses(snapshotProcessesWithThreads);
-    const psProcesses = filterProcesses(psData.processes || []);
+    const handleShowTree = async (proc) => {
+        setSelectedProcess(proc);
+        setTreeData(null);
+        setTreeError(null);
+        setTreeLoading(true);
 
-    const snapshotPIDs = new Set(snapshotProcesses.map(p => p.pid));
-    const psPIDs = new Set(psProcesses.map(p => p.pid));
+        try {
+            const data = await api.getTree(hostname, proc.pid);
+            setTreeData(data.process);
+        } catch (err) {
+            setTreeError(err.message);
+        } finally {
+            setTreeLoading(false);
+        }
+    };
 
-    const displaySnapshot = showDiff
-        ? snapshotProcesses.filter(p => !psPIDs.has(p.pid))
-        : snapshotProcesses;
-
-    const displayPS = showDiff
-        ? psProcesses.filter(p => !snapshotPIDs.has(p.pid))
-        : psProcesses;
+    const handleCloseTree = () => {
+        setSelectedProcess(null);
+        setTreeData(null);
+        setTreeError(null);
+    };
 
     return (
         <div className="processes-view">
             <div className="view-header">
-                <h2 className="view-title">Process Comparison</h2>
+                <h2 className="view-title">Walker Process Tree</h2>
                 <div className="view-controls">
-                    <label className="diff-toggle">
-                        <input
-                            type="checkbox"
-                            checked={showDiff}
-                            onChange={(e) => setShowDiff(e.target.checked)}
-                        />
-                        <span>Show differences only</span>
-                    </label>
+                    <span className="badge badge-primary">{processes.length} processes</span>
                     <span className="timestamp">Last updated: {new Date(snapshotData.timestamp).toLocaleString()}</span>
                 </div>
             </div>
 
-            <div className="comparison-grid">
-                <div className="comparison-column">
-                    <div className="column-header">
-                        <h3>Walker Snapshot</h3>
-                        <span className="badge badge-primary">{displaySnapshot.length} processes</span>
-                    </div>
-                    <div className="process-list">
-                        {displaySnapshot.map(proc => (
+            <div className="processes-panel">
+                <div className="process-list">
+                    {processes.map((proc) => {
+                        const threads = threadMap.get(proc.pid) || [];
+                        const threadCount = threads.length;
+                        const isExpanded = expandedProcesses.has(proc.pid);
+
+                        return (
                             <div key={proc.pid} className="process-item">
                                 <div className="process-row" onClick={() => toggleExpand(proc.pid)}>
                                     <button className="expand-btn">
-                                        {expandedProcesses.has(proc.pid) ? <FiChevronDown /> : <FiChevronRight />}
+                                        {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
                                     </button>
                                     <span className="process-pid">{proc.pid}</span>
                                     <span className="process-comm">{proc.comm}</span>
-                                    <span className="badge badge-secondary">{proc.threads?.length || 0} threads</span>
+                                    <span className="badge badge-secondary">{threadCount} threads</span>
                                     <button
                                         className="btn-icon btn-tree"
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            setSelectedProcess(proc);
+                                            handleShowTree(proc);
                                         }}
-                                        title="Show process tree"
+                                        title="Open process tree modal"
                                     >
                                         <FiGitBranch />
                                     </button>
                                 </div>
-                                {expandedProcesses.has(proc.pid) && proc.threads && proc.threads.length > 0 && (
-                                    <div className="thread-list">
-                                        {proc.threads.map(thread => (
-                                            <div key={thread.tid} className="thread-item">
-                                                <span className="thread-tid">TID: {thread.tid}</span>
-                                                <span className="thread-comm">{thread.comm}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                                {expandedProcesses.has(proc.pid) && (!proc.threads || proc.threads.length === 0) && (
-                                    <div className="thread-list">
-                                        <div className="thread-item empty">No threads found</div>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
 
-                <div className="comparison-column">
-                    <div className="column-header">
-                        <h3>PS Output</h3>
-                        <span className="badge badge-primary">{displayPS.length} processes</span>
-                    </div>
-                    <div className="process-list">
-                        {displayPS.map(proc => (
-                            <div key={proc.pid} className="process-item">
-                                <div className="process-row" onClick={() => toggleExpand(`ps-${proc.pid}`)}>
-                                    <button className="expand-btn">
-                                        {expandedProcesses.has(`ps-${proc.pid}`) ? <FiChevronDown /> : <FiChevronRight />}
-                                    </button>
-                                    <span className="process-pid">{proc.pid}</span>
-                                    <span className="process-comm">{proc.comm}</span>
-                                    <span className="badge badge-secondary">{proc.threads?.length || 0} threads</span>
-                                </div>
-                                {expandedProcesses.has(`ps-${proc.pid}`) && proc.threads && proc.threads.length > 0 && (
-                                    <div className="thread-list">
-                                        {proc.threads.map(thread => (
-                                            <div key={thread.tid} className="thread-item">
-                                                <span className="thread-tid">TID: {thread.tid}</span>
-                                                <span className="thread-comm">{thread.comm}</span>
+                                {isExpanded && (
+                                    <div className="thread-detail">
+                                        <div className="relation-title">Threads from walker -t</div>
+                                        {threadCount > 0 ? (
+                                            <div className="thread-list">
+                                                {threads.map((thread, idx) => (
+                                                    <div key={`${proc.pid}-${thread.tid}-${idx}`} className="relation-item">
+                                                        <span className="thread-tid">TID {thread.tid}</span>
+                                                        <span className="thread-comm">{thread.comm}</span>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
-                                {expandedProcesses.has(`ps-${proc.pid}`) && (!proc.threads || proc.threads.length === 0) && (
-                                    <div className="thread-list">
-                                        <div className="thread-item empty">No threads found</div>
+                                        ) : (
+                                            <div className="thread-item empty">No threads found</div>
+                                        )}
                                     </div>
                                 )}
                             </div>
-                        ))}
-                    </div>
+                        );
+                    })}
                 </div>
             </div>
 
             {selectedProcess && (
                 <ProcessTreeModal
-                    process={selectedProcess}
-                    allProcesses={snapshotData.processes}
-                    onClose={() => setSelectedProcess(null)}
+                    process={treeData || selectedProcess}
+                    loading={treeLoading}
+                    error={treeError}
+                    onClose={handleCloseTree}
                 />
             )}
         </div>

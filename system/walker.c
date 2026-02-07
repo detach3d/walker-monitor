@@ -93,6 +93,27 @@ void CPU_printer(){
 	close(file_desc);
 }
 
+void sock_printer(){
+	int file_desc, ret_val;
+	char msg[524288] = {0};
+
+	file_desc = open(DEVICE_FILE_NAME, 0);
+	if (file_desc < 0) {
+		printf("Can't open device file: %s\n", DEVICE_FILE_NAME);
+		exit(-1);
+	}
+    ret_val = ioctl(file_desc, IOC_WALK_SOCK, (unsigned long)msg);
+	
+    if (ret_val < 0) {
+        printf("ioctl_set_msg failed:%d\n", ret_val);
+        exit(-1);
+    }
+
+    printf("Message by ioctl:\n%s\n", msg);
+
+	close(file_desc);
+}
+
 int 
 main(int argc, char *argv[])
 {
@@ -103,13 +124,14 @@ main(int argc, char *argv[])
 	}
 
 	int opt;
-    while ((opt = getopt(argc, argv, "ptfc")) != -1) {
+    while ((opt = getopt(argc, argv, "ptfcs")) != -1) {
         switch (opt) {
             case 'p': proc_printer(); break;
             case 't': thread_printer(); break;
 			case 'f': fdt_printer(); break;
 			case 'c': CPU_printer(); break;
-            default: fprintf(stderr, "Usage: %s [-p] [-t] [f] [-c]\n", argv[0]);
+			case 's': sock_printer(); break;
+            default: fprintf(stderr, "Usage: %s [-p] [-t] [f] [-c] [-s]\n", argv[0]);
         }
     }
 

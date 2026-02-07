@@ -31,6 +31,12 @@ export const api = {
             body: JSON.stringify({ name, url, apiKey }),
         }),
 
+    updateHost: (hostname, name, url, apiKey) =>
+        fetchJSON(`${API_BASE}/hosts/${hostname}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name, url, apiKey }),
+        }),
+
     removeHost: (hostname) =>
         fetchJSON(`${API_BASE}/hosts/${hostname}`, {
             method: 'DELETE',
@@ -52,9 +58,18 @@ export const api = {
     getCPU: (hostname) =>
         fetchJSON(`${API_BASE}/hosts/${hostname}/cpu`),
 
+    getNetwork: (hostname) =>
+        fetchJSON(`${API_BASE}/hosts/${hostname}/network`),
+
     refresh: (hostname) =>
         fetchJSON(`${API_BASE}/hosts/${hostname}/refresh`),
 
     getRaw: (hostname) =>
         fetchJSON(`${API_BASE}/hosts/${hostname}/raw`),
+
+    getTreeAll: (hostname) =>
+        fetchJSON(`${API_BASE}/hosts/${hostname}/tree`),
+
+    getTree: (hostname, pid) =>
+        fetchJSON(`${API_BASE}/hosts/${hostname}/tree/${pid}`),
 };

@@ -1,11 +1,13 @@
 import React from 'react';
-import { FiServer, FiFileText, FiCpu } from 'react-icons/fi';
+import { FiServer, FiFileText, FiCpu, FiGrid, FiWifi } from 'react-icons/fi';
 import './Sidebar.css';
 
 const Sidebar = ({ activeView, onViewChange }) => {
     const navItems = [
+        { id: 'dashboard', label: 'Dashboard', icon: FiGrid },
         { id: 'processes', label: 'Processes', icon: FiServer },
         { id: 'fdt', label: 'File Descriptors', icon: FiFileText },
+        { id: 'network', label: 'Network', icon: FiWifi },
         { id: 'cpu', label: 'CPU', icon: FiCpu },
     ];
 

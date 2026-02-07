@@ -1,22 +1,33 @@
+/* ProcessTreeModal - Enterprise Security Platform Style */
+
 .process-tree-modal {
-    max-width: 700px;
+    max-width: 720px;
 }
 
+/* Section */
 .tree-section {
-    margin-bottom: 30px;
+    margin-bottom: 28px;
+}
+
+.tree-section:last-child {
+    margin-bottom: 0;
 }
 
 .tree-section-title {
-    font-size: 14px;
+    font-size: 0.75rem;
     font-weight: 600;
-    color: var(--accent-green-primary);
+    color: var(--accent-primary-light);
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
+    letter-spacing: 0.05em;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
     border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
+/* Tree Chain (Parent Chain) */
 .tree-chain {
     display: flex;
     flex-direction: column;
@@ -30,68 +41,129 @@
 }
 
 .tree-arrow {
-    color: var(--accent-green-tertiary);
-    font-size: 18px;
+    color: var(--accent-primary);
+    font-size: 1.125rem;
     width: 24px;
     text-align: center;
+    opacity: 0.7;
 }
 
+/* Tree Node */
 .tree-node {
     flex: 1;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
+    gap: 14px;
+    padding: 12px 16px;
     background: var(--bg-tertiary);
-    border-radius: 6px;
+    border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
     transition: all var(--transition-fast);
 }
 
 .tree-node:hover {
-    border-color: var(--accent-green-dark);
-    background: rgba(0, 255, 65, 0.05);
+    border-color: var(--accent-primary);
+    background: var(--bg-card-hover);
 }
 
+/* Current/Highlighted Process */
 .tree-current {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px 16px;
-    background: rgba(0, 255, 65, 0.15);
-    border: 2px solid var(--accent-green-tertiary);
-    border-radius: 8px;
-    box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+    gap: 14px;
+    padding: 16px 18px;
+    background: var(--status-info-bg);
+    border: 2px solid var(--accent-primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-glow);
 }
 
+/* PID Badge */
 .tree-pid {
-    font-family: 'Courier New', monospace;
+    font-family: var(--font-mono);
     font-weight: 600;
-    color: var(--accent-green-secondary);
-    padding: 4px 8px;
+    color: var(--accent-primary-light);
+    padding: 5px 10px;
     background: var(--bg-secondary);
-    border-radius: 4px;
-    font-size: 13px;
+    border-radius: var(--radius-sm);
+    font-size: 0.8125rem;
 }
 
 .tree-pid.highlighted {
-    color: var(--accent-green-primary);
+    color: var(--accent-primary);
     background: var(--bg-primary);
-    font-size: 15px;
+    font-size: 0.9375rem;
 }
 
+/* Process Name */
 .tree-comm {
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 0.875rem;
+    font-weight: 500;
 }
 
 .tree-comm.highlighted {
     font-weight: 600;
-    font-size: 16px;
+    font-size: 1rem;
 }
 
+/* Children Grid */
 .tree-children {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 10px;
+}
+
+.tree-children .tree-node {
+    padding: 10px 14px;
+}
+
+/* Empty State for no children */
+.tree-empty {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 0.875rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    border: 1px dashed var(--border-color);
+}
+
+/* Loading State */
+.tree-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    gap: 16px;
+    color: var(--text-secondary);
+}
+
+.tree-loading p {
+    font-size: 0.875rem;
+}
+
+/* Error State */
+.tree-error {
+    padding: 20px;
+    text-align: center;
+    color: var(--status-error);
+    font-size: 0.875rem;
+    background: var(--status-error-bg);
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+    .tree-children {
+        grid-template-columns: 1fr;
+    }
+
+    .tree-current {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
 }

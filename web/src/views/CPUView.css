@@ -1,0 +1,221 @@
+/* CPUView - Enterprise Security Platform Style */
+
+.cpu-view {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* View Header */
+.cpu-view .view-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.cpu-view .view-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.cpu-view .view-title::before {
+    content: '⚡';
+    font-size: 1.125rem;
+}
+
+.cpu-view .timestamp {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+}
+
+/* Table Wrapper */
+.cpu-view .table-wrapper {
+    flex: 1;
+    overflow: auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+}
+
+.cpu-view table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.cpu-view thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-tertiary);
+}
+
+.cpu-view th {
+    text-align: left;
+    padding: 14px 16px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+    user-select: none;
+}
+
+.cpu-view th[style*="cursor: pointer"]:hover {
+    color: var(--accent-primary-light);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.cpu-view th svg {
+    vertical-align: middle;
+    margin-left: 4px;
+    color: var(--accent-primary);
+}
+
+.cpu-view tbody tr {
+    transition: background var(--transition-fast);
+}
+
+.cpu-view tbody tr:hover {
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.cpu-view td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    vertical-align: middle;
+}
+
+.cpu-view tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* PID Cell */
+.cpu-view .process-pid {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: var(--accent-primary-light);
+    background: var(--bg-secondary);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+}
+
+/* CPU Core Badge */
+.cpu-view .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.cpu-view .badge-primary {
+    background: var(--status-info-bg);
+    color: var(--accent-primary-light);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.cpu-view .badge-secondary {
+    background: rgba(139, 92, 246, 0.15);
+    color: var(--accent-secondary-light);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+/* Time Values */
+.cpu-view td:nth-child(5),
+.cpu-view td:nth-child(6) {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+.cpu-view td:nth-child(7) {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+}
+
+/* Nice and Priority */
+.cpu-view td:nth-child(8),
+.cpu-view td:nth-child(9) {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+}
+
+.cpu-view .cpu-usage-text {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+/* Empty State */
+.cpu-view .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    padding: 60px 40px;
+}
+
+.cpu-view .empty-state-icon {
+    font-size: 3rem;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.cpu-view .empty-state-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.cpu-view .empty-state-description {
+    font-size: 0.875rem;
+    color: var(--text-tertiary);
+    max-width: 320px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .cpu-view th,
+    .cpu-view td {
+        padding: 10px 12px;
+    }
+
+    .cpu-view table {
+        font-size: 0.75rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .cpu-view .view-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    /* Hide less important columns on mobile */
+    .cpu-view th:nth-child(8),
+    .cpu-view td:nth-child(8),
+    .cpu-view th:nth-child(9),
+    .cpu-view td:nth-child(9) {
+        display: none;
+    }
+}

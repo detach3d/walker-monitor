@@ -2,11 +2,18 @@
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
+#include <linux/net.h>
+#include <net/sock.h>
+#include <net/inet_sock.h>
+#include <linux/ipv6.h>
+#include <net/ipv6.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
 #include <linux/dcache.h>
 #include <linux/fdtable.h>
 #include <linux/sched/cputime.h>
+#include <linux/sched.h>
+#include <linux/cpumask.h>
 #include <linux/file.h>
 #include "task_walker.h"
 
@@ -40,9 +47,18 @@ static ssize_t CPU_walker_write(struct file *file,
 								size_t length,
 								loff_t *offset);
 
+static ssize_t sock_walker_write(struct file *file,
+								 char __user *buffer,
+								 size_t length,
+								 loff_t *offset);
+
 void get_file_path_current(struct task_struct *task,
 						   char *buf,
 						   int buflen);
+
+void get_sock_current(struct task_struct *task,
+					  char *buf,
+					  int buflen);
 
 const char *policy_name(int policy);
 
@@ -58,6 +74,7 @@ static char message_buf_for_procs[4194304];
 static char message_buf_for_fdt[524288];
 static char message_buf_for_threads[262144];
 static char message_buf_for_CPU[131072];
+static char message_buf_for_sock[524288];
 
 static struct file_operations g_fops = {
 	.owner = THIS_MODULE,
@@ -143,6 +160,16 @@ static long device_ioctl(struct file *file,
 	case IOC_WALK_CPU:
 		printk(KERN_INFO "ioctl: Walking CPU info...\n");
 		CPU_walker_write(file, NULL, 0, 0);
+
+		if (copy_to_user((char __user *)ioctl_param, Message_Ptr, strlen(Message_Ptr) + 1))
+		{
+			printk(KERN_ERR "Failed to copy data to user space\n");
+			return -EFAULT;
+		}
+		break;
+	case IOC_WALK_SOCK:
+		printk(KERN_INFO "ioctl: Walking CPU info...\n");
+		sock_walker_write(file, NULL, 0, 0);
 
 		if (copy_to_user((char __user *)ioctl_param, Message_Ptr, strlen(Message_Ptr) + 1))
 		{
@@ -342,6 +369,9 @@ static ssize_t CPU_walker_write(struct file *file,
 	int offset_buf = 0;
 	int remaining = sizeof(message_buf_for_CPU) - 1;
 
+	// Get online CPU count
+	int online_cpus = num_online_cpus();
+
 	printk(KERN_INFO "Walking through the CPU info...\n");
 
 	rcu_read_lock();
@@ -358,11 +388,13 @@ static ssize_t CPU_walker_write(struct file *file,
 						 "PID: %d | COMM: %s\n\
 CURRENT CPU: %d\n\
 USER TIME: %llu nanosec | SYSTEM TIME: %llu nanosec | TOTAL TIME: %llu nanosec\n\
-NICE: %d | CURRENT PRIORITY: %d | BASE PRIORITY: %d | POLICY: %s\n",
+NICE: %d | CURRENT PRIORITY: %d | BASE PRIORITY: %d | POLICY: %s\n\
+CPU usage: %lu%%\n",
 						 task->pid, task->comm,
 						 task_cpu(task),
-						 div_u64(utime_ns,  NSEC_PER_USEC), div_u64(stime_ns,  NSEC_PER_USEC), div_u64(total_ns,  NSEC_PER_USEC),
-						 task_nice(task), task->prio, task->static_prio, policy_name(task->policy));
+						 div_u64(utime_ns, NSEC_PER_USEC), div_u64(stime_ns, NSEC_PER_USEC), div_u64(total_ns, NSEC_PER_USEC),
+						 task_nice(task), task->prio, task->static_prio, policy_name(task->policy),
+						 task->se.avg.util_avg * 100 / (SCHED_CAPACITY_SCALE * online_cpus));
 
 		if (bytes <= 0 || bytes >= remaining)
 			break;
@@ -377,6 +409,50 @@ NICE: %d | CURRENT PRIORITY: %d | BASE PRIORITY: %d | POLICY: %s\n",
 	return offset_buf;
 }
 
+static ssize_t sock_walker_write(struct file *file,
+								 char __user *buffer,
+								 size_t length,
+								 loff_t *offset)
+{
+	struct task_struct *task;
+	int offset_buf = 0;
+	int remaining = sizeof(message_buf_for_sock) - 1;
+
+	printk(KERN_INFO "Walking through the task list...\n");
+
+	rcu_read_lock();
+	for_each_process(task)
+	{
+		static char message_buf_for_socket[32768];
+		int bytes = 0;
+		get_sock_current(task, message_buf_for_socket, sizeof(message_buf_for_socket));
+
+		bytes = snprintf(message_buf_for_sock + offset_buf, remaining,
+						 "PID: %d | Comm: %s\n",
+						 task->pid, task->comm);
+
+		if (bytes <= 0 || bytes >= remaining)
+			break;
+
+		offset_buf += bytes;
+		remaining -= bytes;
+
+		bytes = snprintf(message_buf_for_sock + offset_buf, remaining,
+						 "SOCKET INFO: %s\n", message_buf_for_socket);
+
+		if (bytes <= 0 || bytes >= remaining)
+			break;
+
+		offset_buf += bytes;
+		remaining -= bytes;
+	}
+	rcu_read_unlock();
+
+	message_buf_for_sock[offset_buf] = '\0';
+	Message_Ptr = message_buf_for_sock;
+	return offset_buf;
+}
+
 void get_file_path_current(struct task_struct *task, char *buf, int buflen)
 {
 	struct file *file_obj;
@@ -384,10 +460,11 @@ void get_file_path_current(struct task_struct *task, char *buf, int buflen)
 	int offset_buf = 0;
 	struct files_struct *files = task->files;
 	struct fdtable *fdt;
-	if (files)
-	{
-		fdt = files_fdtable(files);
-	}
+
+	if (!files)
+		return;
+
+	fdt = files_fdtable(files);
 
 	for (i = 0; i < fdt->max_fds; i++)
 	{
@@ -430,6 +507,109 @@ void get_file_path_current(struct task_struct *task, char *buf, int buflen)
 		}
 	}
 	// pr_info("%s\n", buf);
+	buf[offset_buf] = '\0';
+}
+
+void get_sock_current(struct task_struct *task, char *buf, int buflen)
+{
+	int i;
+	int offset_buf = 0;
+	struct files_struct *files = task->files;
+	struct fdtable *fdt;
+
+	if (!files)
+		return;
+
+	fdt = files_fdtable(files);
+
+	if (!fdt)
+		return;
+
+	for (i = 0; i < fdt->max_fds; i++)
+	{
+		struct file *file_obj;
+		struct socket *sock;
+		struct sock *sk;
+
+		file_obj = fdt->fd[i];
+
+		if (file_obj)
+			sock = sock_from_file(file_obj);
+
+		if (sock)
+			sk = sock->sk;
+
+		if (sk)
+		{
+			switch (sk->sk_family)
+			{
+			case AF_INET:
+			{
+				struct inet_sock *inet = inet_sk(sk);
+				__be32 saddr = inet->inet_saddr;
+				__be32 daddr = inet->inet_daddr;
+				__u16 sport = inet->inet_num;
+				__u16 dport = ntohs(inet->inet_dport);
+
+				char src[16], dst[16];
+
+				snprintf(src, sizeof(src), "%pI4", &saddr);
+				snprintf(dst, sizeof(dst), "%pI4", &daddr);
+
+				int bytes = snprintf(buf + offset_buf, buflen,
+									 "File desc %d: %s:%u -> %s:%u\n",
+									 i, src, sport, dst, dport);
+
+				if (bytes < buflen)
+				{
+					offset_buf += bytes;
+					buflen -= bytes;
+				}
+				else
+				{
+					break;
+				}
+
+				break;
+			}
+			case AF_INET6:
+			{
+				struct inet_sock *inet = inet_sk(sk);
+				struct ipv6_pinfo *np = inet6_sk(sk);
+				const struct in6_addr *saddr6 = &np->saddr;
+				const struct in6_addr *daddr6 = &sk->sk_v6_daddr;
+				__u16 sport = inet->inet_num;		   /* host order */
+				__u16 dport = ntohs(inet->inet_dport); /* network -> host */
+
+				char src[16], dst[16];
+
+				snprintf(src, sizeof(src), "%pI6c", saddr6);
+				snprintf(dst, sizeof(dst), "%pI6c", daddr6);
+
+				int bytes = snprintf(buf + offset_buf, buflen,
+									 "File desc %d: [%s]:%u -> [%s]:%u\n",
+									 i, src, sport, dst, dport);
+
+				if (bytes < buflen)
+				{
+					offset_buf += bytes;
+					buflen -= bytes;
+				}
+				else
+				{
+					break;
+				}
+
+				break;
+			}
+			default:
+				/* AF_UNIX, AF_NETLINK, etc. */
+				//pr_info("non-INET socket family=%d\n", sk->sk_family);
+				break;
+			}
+		}
+	}
+
 	buf[offset_buf] = '\0';
 }
 

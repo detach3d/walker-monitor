@@ -9,6 +9,7 @@
 #define IOC_WALK_THREADS		_IO(TASK_WALKER_MAGIC, 2)
 #define IOC_WALK_FDT            _IO(TASK_WALKER_MAGIC, 3)
 #define IOC_WALK_CPU            _IO(TASK_WALKER_MAGIC, 4)
+#define IOC_WALK_SOCK           _IO(TASK_WALKER_MAGIC, 5)
 #define DEVICE_FILE_NAME        "/dev/task_walker"
 
 /*

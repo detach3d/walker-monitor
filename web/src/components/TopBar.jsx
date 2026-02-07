@@ -9,9 +9,23 @@ const TopBar = ({
     onRefresh,
     onOpenHostInfo,
     onOpenAddHost,
+    activeView,
     searchQuery,
     onSearchChange
 }) => {
+    const getSearchPlaceholder = () => {
+        switch (activeView) {
+            case 'fdt':
+                return 'Search by PID, command, or file path...';
+            case 'network':
+                return 'Search by PID, command, endpoint, or state...';
+            case 'cpu':
+                return 'Search by PID or command...';
+            default:
+                return 'Search by PID or command...';
+        }
+    };
+
     return (
         <div className="topbar">
             <div className="topbar-section">
@@ -46,7 +60,7 @@ const TopBar = ({
                     <FiSearch className="search-icon" />
                     <input
                         type="text"
-                        placeholder="Search by PID or command..."
+                        placeholder={getSearchPlaceholder()}
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
                         className="search-input"

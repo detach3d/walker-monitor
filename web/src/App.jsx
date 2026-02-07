@@ -3,8 +3,10 @@ import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import AddHostModal from './components/AddHostModal';
 import HostInfoModal from './components/HostInfoModal';
+import DashboardView from './views/DashboardView';
 import ProcessesView from './views/ProcessesView';
 import FileDescriptorsView from './views/FileDescriptorsView';
+import NetworkView from './views/NetworkView';
 import CPUView from './views/CPUView';
 import { api } from './api/client';
 import './styles/App.css';
@@ -12,7 +14,7 @@ import './styles/App.css';
 function App() {
   const [hosts, setHosts] = useState([]);
   const [selectedHost, setSelectedHost] = useState(null);
-  const [activeView, setActiveView] = useState('processes');
+  const [activeView, setActiveView] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modal states
@@ -23,6 +25,7 @@ function App() {
   const [snapshotData, setSnapshotData] = useState(null);
   const [psData, setPsData] = useState(null);
   const [fdtData, setFdtData] = useState(null);
+  const [networkData, setNetworkData] = useState(null);
   const [cpuData, setCpuData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -56,25 +59,39 @@ function App() {
     }
   };
 
-  const loadData = async (hostname) => {
+  const loadData = async (hostname, viewOverride = activeView, useRefresh = false) => {
     if (!hostname) return;
 
+    const view = viewOverride || activeView;
     setLoading(true);
     setError(null);
 
     try {
-      // Load data based on active view
-      if (activeView === 'processes') {
-        const [snapshot, ps] = await Promise.all([
-          api.getSnapshot(hostname),
-          api.getPS(hostname)
+      if (view === 'dashboard') {
+        const [snapshot, ps, fdt, cpu] = await Promise.all([
+          useRefresh ? api.refresh(hostname) : api.getSnapshot(hostname),
+          api.getPS(hostname),
+          api.getFDT(hostname),
+          api.getCPU(hostname)
         ]);
         setSnapshotData(snapshot);
         setPsData(ps);
-      } else if (activeView === 'fdt') {
+        setFdtData(fdt);
+        setCpuData(cpu);
+      } else if (view === 'processes') {
+        const [processTree, threadSnapshot] = await Promise.all([
+          api.getTreeAll(hostname),
+          useRefresh ? api.refresh(hostname) : api.getSnapshot(hostname)
+        ]);
+        setSnapshotData(processTree);
+        setPsData(threadSnapshot);
+      } else if (view === 'fdt') {
         const fdt = await api.getFDT(hostname);
         setFdtData(fdt);
-      } else if (activeView === 'cpu') {
+      } else if (view === 'network') {
+        const network = await api.getNetwork(hostname);
+        setNetworkData(network);
+      } else if (view === 'cpu') {
         const cpu = await api.getCPU(hostname);
         setCpuData(cpu);
       }
@@ -88,42 +105,20 @@ function App() {
   const handleRefresh = async () => {
     if (!selectedHost) return;
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      if (activeView === 'processes') {
-        const [snapshot, ps] = await Promise.all([
-          api.refresh(selectedHost),
-          api.getPS(selectedHost)
-        ]);
-        setSnapshotData(snapshot);
-        setPsData(ps);
-      } else if (activeView === 'fdt') {
-        const fdt = await api.getFDT(selectedHost);
-        setFdtData(fdt);
-      } else if (activeView === 'cpu') {
-        const cpu = await api.getCPU(selectedHost);
-        setCpuData(cpu);
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    await loadData(selectedHost, activeView, true);
   };
 
   const handleHostSelect = (hostname) => {
     setSelectedHost(hostname);
     if (hostname) {
-      loadData(hostname);
+      loadData(hostname, activeView);
     }
   };
 
   const handleViewChange = (view) => {
     setActiveView(view);
     if (selectedHost) {
-      loadData(selectedHost);
+      loadData(selectedHost, view);
     }
   };
 
@@ -137,7 +132,17 @@ function App() {
     setSnapshotData(null);
     setPsData(null);
     setFdtData(null);
+    setNetworkData(null);
     setCpuData(null);
+  };
+
+  const handleHostUpdated = async (oldName, newName) => {
+    await loadHosts();
+
+    if (selectedHost === oldName) {
+      setSelectedHost(newName);
+      loadData(newName, activeView);
+    }
   };
 
   return (
@@ -152,6 +157,7 @@ function App() {
           onRefresh={handleRefresh}
           onOpenHostInfo={() => setShowHostInfo(true)}
           onOpenAddHost={() => setShowAddHost(true)}
+          activeView={activeView}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
         />
@@ -172,17 +178,38 @@ function App() {
 
           {!loading && !error && (
             <>
+              {activeView === 'dashboard' && (
+                <DashboardView
+                  hosts={hosts}
+                  snapshotData={snapshotData}
+                  psData={psData}
+                  fdtData={fdtData}
+                  cpuData={cpuData}
+                  selectedHost={selectedHost}
+                  loading={loading}
+                  onRefresh={handleRefresh}
+                />
+              )}
+
               {activeView === 'processes' && (
                 <ProcessesView
                   snapshotData={snapshotData}
-                  psData={psData}
+                  threadsData={psData}
                   searchQuery={searchQuery}
+                  hostname={selectedHost}
                 />
               )}
 
               {activeView === 'fdt' && (
                 <FileDescriptorsView
                   fdtData={fdtData}
+                  searchQuery={searchQuery}
+                />
+              )}
+
+              {activeView === 'network' && (
+                <NetworkView
+                  networkData={networkData}
                   searchQuery={searchQuery}
                 />
               )}
@@ -210,6 +237,7 @@ function App() {
           hostname={selectedHost}
           onClose={() => setShowHostInfo(false)}
           onHostRemoved={handleHostRemoved}
+          onHostUpdated={handleHostUpdated}
         />
       )}
     </div>

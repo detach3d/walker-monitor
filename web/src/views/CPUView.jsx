@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FiArrowUp, FiArrowDown } from 'react-icons/fi';
+import './CPUView.css';
 
 const CPUView = ({ cpuData, searchQuery }) => {
     const [sortField, setSortField] = useState('pid');
@@ -43,16 +44,24 @@ const CPUView = ({ cpuData, searchQuery }) => {
         return `${min.toFixed(2)} min`;
     };
 
+    const formatCPUUsage = (usage) => {
+        if (usage === undefined || usage === null) return 'N/A';
+        return `${usage}%`;
+    };
+
     let processes = filterProcesses(cpuData.processes || []);
 
     // Sort processes
     processes = [...processes].sort((a, b) => {
-        let aVal = a[sortField];
-        let bVal = b[sortField];
+        let aVal = a[sortField] ?? '';
+        let bVal = b[sortField] ?? '';
 
-        if (sortField === 'comm') {
-            aVal = aVal.toLowerCase();
-            bVal = bVal.toLowerCase();
+        if (sortField === 'comm' || sortField === 'policy') {
+            aVal = String(aVal).toLowerCase();
+            bVal = String(bVal).toLowerCase();
+        } else {
+            aVal = Number(aVal || 0);
+            bVal = Number(bVal || 0);
         }
 
         if (sortDirection === 'asc') {
@@ -62,9 +71,10 @@ const CPUView = ({ cpuData, searchQuery }) => {
         }
     });
 
-    const SortIcon = () => (
-        sortDirection === 'asc' ? <FiArrowUp size={12} /> : <FiArrowDown size={12} />
-    );
+    const renderSortIcon = (field) => {
+        if (sortField !== field) return null;
+        return sortDirection === 'asc' ? <FiArrowUp size={12} /> : <FiArrowDown size={12} />;
+    };
 
     return (
         <div className="cpu-view">
@@ -78,31 +88,34 @@ const CPUView = ({ cpuData, searchQuery }) => {
                     <thead>
                         <tr>
                             <th onClick={() => handleSort('pid')} style={{ cursor: 'pointer' }}>
-                                PID {sortField === 'pid' && <SortIcon />}
+                                PID {renderSortIcon('pid')}
                             </th>
                             <th onClick={() => handleSort('comm')} style={{ cursor: 'pointer' }}>
-                                Command {sortField === 'comm' && <SortIcon />}
+                                Command {renderSortIcon('comm')}
                             </th>
                             <th onClick={() => handleSort('cpu')} style={{ cursor: 'pointer' }}>
-                                CPU {sortField === 'cpu' && <SortIcon />}
+                                CPU {renderSortIcon('cpu')}
+                            </th>
+                            <th onClick={() => handleSort('cpu_usage')} style={{ cursor: 'pointer' }}>
+                                CPU Usage {renderSortIcon('cpu_usage')}
                             </th>
                             <th onClick={() => handleSort('user_time_ns')} style={{ cursor: 'pointer' }}>
-                                User Time {sortField === 'user_time_ns' && <SortIcon />}
+                                User Time {renderSortIcon('user_time_ns')}
                             </th>
                             <th onClick={() => handleSort('system_time_ns')} style={{ cursor: 'pointer' }}>
-                                System Time {sortField === 'system_time_ns' && <SortIcon />}
+                                System Time {renderSortIcon('system_time_ns')}
                             </th>
                             <th onClick={() => handleSort('total_time_ns')} style={{ cursor: 'pointer' }}>
-                                Total Time {sortField === 'total_time_ns' && <SortIcon />}
+                                Total Time {renderSortIcon('total_time_ns')}
                             </th>
                             <th onClick={() => handleSort('nice')} style={{ cursor: 'pointer' }}>
-                                Nice {sortField === 'nice' && <SortIcon />}
+                                Nice {renderSortIcon('nice')}
                             </th>
                             <th onClick={() => handleSort('current_priority')} style={{ cursor: 'pointer' }}>
-                                Priority {sortField === 'current_priority' && <SortIcon />}
+                                Priority {renderSortIcon('current_priority')}
                             </th>
                             <th onClick={() => handleSort('policy')} style={{ cursor: 'pointer' }}>
-                                Policy {sortField === 'policy' && <SortIcon />}
+                                Policy {renderSortIcon('policy')}
                             </th>
                         </tr>
                     </thead>
@@ -112,6 +125,9 @@ const CPUView = ({ cpuData, searchQuery }) => {
                                 <td><span className="process-pid">{proc.pid}</span></td>
                                 <td>{proc.comm}</td>
                                 <td><span className="badge badge-primary">Core {proc.cpu}</span></td>
+                                <td>
+                                    <span className="cpu-usage-text">{formatCPUUsage(proc.cpu_usage)}</span>
+                                </td>
                                 <td>{formatTime(proc.user_time_ns)}</td>
                                 <td>{formatTime(proc.system_time_ns)}</td>
                                 <td>{formatTime(proc.total_time_ns)}</td>

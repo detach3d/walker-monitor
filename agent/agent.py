@@ -286,6 +286,7 @@ def parse_cpu_snapshot(raw_output):
     CURRENT CPU: 1
     USER TIME: 501462 nanosec | SYSTEM TIME: 555768 nanosec | TOTAL TIME: 1057230 nanosec
     NICE: 0 | CURRENT PRIORITY: 120 | BASE PRIORITY: 120 | POLICY: normal
+    CPU usage: 12%
     """
     processes = []
     lines = raw_output.split('\n')
@@ -305,7 +306,8 @@ def parse_cpu_snapshot(raw_output):
                 'comm': proc_match.group(2)
             }
             
-            # Next 3 lines should be CPU, TIME, and NICE/PRIORITY/POLICY
+            # Next lines should be CPU, TIME, NICE/PRIORITY/POLICY,
+            # and optionally CPU usage for newer driver output.
             if i + 3 < len(lines):
                 # CPU line
                 cpu_line = lines[i + 1].strip()
@@ -335,14 +337,145 @@ def parse_cpu_snapshot(raw_output):
                     process['current_priority'] = int(nice_match.group(2))
                     process['base_priority'] = int(nice_match.group(3))
                     process['policy'] = nice_match.group(4)
-                
+
+                # Optional CPU usage line for backward compatibility
+                step = 4
+                if i + 4 < len(lines):
+                    usage_line = lines[i + 4].strip()
+                    usage_match = re.match(r'^CPU usage:\s*(\d+)%$', usage_line)
+                    if usage_match:
+                        process['cpu_usage'] = int(usage_match.group(1))
+                        step = 5
+
                 processes.append(process)
-                i += 4
+                i += step
             else:
                 i += 1
         else:
             i += 1
     
+    return processes
+
+
+def parse_socket_snapshot(raw_output):
+    """
+    Parse walker -s output into structured JSON
+
+    Format:
+    PID: 123 | Comm: processname
+    SOCKET INFO: File desc 4: 127.0.0.1:8080 -> 0.0.0.0:0
+    File desc 7: [::1]:5000 -> [::]:0
+    """
+    def parse_endpoint(endpoint):
+        endpoint = endpoint.strip()
+
+        ipv6_match = re.match(r'^\[(.+)\]:(\d+)$', endpoint)
+        if ipv6_match:
+            return ipv6_match.group(1), int(ipv6_match.group(2)), 'IPv6'
+
+        ipv4_match = re.match(r'^(.+):(\d+)$', endpoint)
+        if ipv4_match:
+            return ipv4_match.group(1), int(ipv4_match.group(2)), 'IPv4'
+
+        return endpoint, None, 'Unknown'
+
+    def parse_socket_line(line):
+        socket_match = re.match(r'^File desc (\d+): (.+)$', line.strip())
+        if not socket_match:
+            return None
+
+        fd = int(socket_match.group(1))
+        mapping = socket_match.group(2)
+        endpoints = mapping.split(' -> ', 1)
+        if len(endpoints) != 2:
+            return None
+
+        local_raw, remote_raw = endpoints[0].strip(), endpoints[1].strip()
+        local_addr, local_port, local_family = parse_endpoint(local_raw)
+        remote_addr, remote_port, remote_family = parse_endpoint(remote_raw)
+
+        family = local_family if local_family == remote_family else 'Mixed'
+        socket_state = 'listening' if remote_port == 0 else 'connected'
+
+        return {
+            'fd': fd,
+            'local': local_raw,
+            'remote': remote_raw,
+            'local_address': local_addr,
+            'local_port': local_port,
+            'remote_address': remote_addr,
+            'remote_port': remote_port,
+            'family': family,
+            'state': socket_state
+        }
+
+    processes = []
+    current_process = None
+    current_socket_keys = set()
+    lines = raw_output.split('\n')
+    i = 0
+
+    while i < len(lines):
+        line = lines[i].rstrip()
+        if not line.strip():
+            i += 1
+            continue
+
+        proc_match = re.match(r'^PID: (\d+) \| Comm: (.+)$', line)
+        if proc_match:
+            if current_process:
+                processes.append(current_process)
+            current_process = {
+                'pid': int(proc_match.group(1)),
+                'comm': proc_match.group(2),
+                'sockets': []
+            }
+            current_socket_keys = set()
+            i += 1
+            continue
+
+        if line.startswith('SOCKET INFO:') and current_process:
+            first_socket_line = line.replace('SOCKET INFO:', '', 1).strip()
+            if first_socket_line:
+                parsed = parse_socket_line(first_socket_line)
+                if parsed:
+                    key = (
+                        parsed['fd'],
+                        parsed['local'],
+                        parsed['remote'],
+                        parsed['family'],
+                        parsed['state']
+                    )
+                    if key not in current_socket_keys:
+                        current_socket_keys.add(key)
+                        current_process['sockets'].append(parsed)
+
+            i += 1
+            while i < len(lines):
+                next_line = lines[i].rstrip()
+                if next_line.startswith('PID: '):
+                    break
+                if next_line.strip():
+                    parsed = parse_socket_line(next_line)
+                    if parsed:
+                        key = (
+                            parsed['fd'],
+                            parsed['local'],
+                            parsed['remote'],
+                            parsed['family'],
+                            parsed['state']
+                        )
+                        if key not in current_socket_keys:
+                            current_socket_keys.add(key)
+                            current_process['sockets'].append(parsed)
+                i += 1
+            continue
+
+        i += 1
+
+    if current_process:
+        processes.append(current_process)
+
     return processes
 
 
@@ -444,13 +577,66 @@ def cpu_snapshot():
     })
 
 
+@app.route('/network', methods=['GET'])
+def network_snapshot():
+    """Get socket info (walker -s parsed to JSON)"""
+    raw_output, error = execute_walker('-s')
+    if error:
+        return jsonify({'error': error}), 500
+
+    processes = parse_socket_snapshot(raw_output)
+
+    return jsonify({
+        'hostname': config.HOSTNAME,
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'processes': processes
+    })
+
+
+@app.route('/tree', methods=['GET'])
+def tree_snapshot():
+    """Get process tree with parents and children (walker -p parsed to JSON)"""
+    raw_output, error = execute_walker('-p')
+    if error:
+        return jsonify({'error': error}), 500
+
+    processes = parse_process_snapshot(raw_output)
+
+    return jsonify({
+        'hostname': config.HOSTNAME,
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'processes': processes
+    })
+
+
+@app.route('/tree/<int:pid>', methods=['GET'])
+def tree_for_pid(pid):
+    """Get process tree data for a specific PID"""
+    raw_output, error = execute_walker('-p')
+    if error:
+        return jsonify({'error': error}), 500
+
+    processes = parse_process_snapshot(raw_output)
+
+    # Find the specific process
+    for proc in processes:
+        if proc['pid'] == pid:
+            return jsonify({
+                'hostname': config.HOSTNAME,
+                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'process': proc
+            })
+
+    return jsonify({'error': f'Process {pid} not found'}), 404
+
+
 @app.route('/raw', methods=['GET'])
 def raw_output():
     """Get raw walker -p output for debugging"""
     raw_output, error = execute_walker('-p')
     if error:
         return jsonify({'error': error}), 500
-    
+
     return jsonify({
         'hostname': config.HOSTNAME,
         'timestamp': datetime.utcnow().isoformat() + 'Z',
