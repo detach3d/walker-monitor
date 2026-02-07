@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { FiChevronDown, FiChevronRight, FiGitBranch, FiX } from 'react-icons/fi';
 import ProcessTreeFlow from '../components/ProcessTreeFlow';
 import { api } from '../api/client';
@@ -60,6 +60,9 @@ const ProcessesView = ({ snapshotData, threadsData, searchQuery, hostname }) => 
     const [graphError, setGraphError] = useState(null);
     const [graphProcess, setGraphProcess] = useState(null);
     const [graphSelectedProcess, setGraphSelectedProcess] = useState(null);
+    const [graphNodeLoadingPid, setGraphNodeLoadingPid] = useState(null);
+    const [graphNodeError, setGraphNodeError] = useState(null);
+    const graphProcessCache = useRef(new Map());
 
     const threadMap = useMemo(() => {
         const map = new Map();
@@ -129,15 +132,43 @@ const ProcessesView = ({ snapshotData, threadsData, searchQuery, hostname }) => 
         setGraphError(null);
         setGraphProcess(null);
         setGraphSelectedProcess(null);
+        setGraphNodeLoadingPid(null);
+        setGraphNodeError(null);
 
         try {
             const data = await api.getTree(hostname, proc.pid);
             setGraphProcess(data.process);
             setGraphSelectedProcess(data.process);
+            graphProcessCache.current.set(String(data.process.pid), data.process);
         } catch (err) {
             setGraphError(err.message);
         } finally {
             setGraphLoading(false);
+        }
+    };
+
+    const handleGraphNodeClick = async (nodeProcess) => {
+        if (!hostname || !nodeProcess?.pid) return;
+
+        const pidKey = String(nodeProcess.pid);
+        setGraphNodeError(null);
+
+        if (graphProcessCache.current.has(pidKey)) {
+            setGraphSelectedProcess(graphProcessCache.current.get(pidKey));
+            setGraphNodeLoadingPid(null);
+            return;
+        }
+
+        setGraphSelectedProcess(nodeProcess);
+        setGraphNodeLoadingPid(nodeProcess.pid);
+        try {
+            const data = await api.getTree(hostname, nodeProcess.pid);
+            graphProcessCache.current.set(String(data.process.pid), data.process);
+            setGraphSelectedProcess(data.process);
+        } catch (err) {
+            setGraphNodeError(err.message);
+        } finally {
+            setGraphNodeLoadingPid(null);
         }
     };
 
@@ -147,6 +178,8 @@ const ProcessesView = ({ snapshotData, threadsData, searchQuery, hostname }) => 
         setGraphError(null);
         setGraphProcess(null);
         setGraphSelectedProcess(null);
+        setGraphNodeLoadingPid(null);
+        setGraphNodeError(null);
     };
 
     if (!snapshotData) {
@@ -266,7 +299,7 @@ const ProcessesView = ({ snapshotData, threadsData, searchQuery, hostname }) => 
                                         processes={graphProcesses}
                                         direction="LR"
                                         edgeType="smoothstep"
-                                        onNodeClick={setGraphSelectedProcess}
+                                        onNodeClick={handleGraphNodeClick}
                                     />
                                 </div>
                                 <aside className="process-graph-sidebar">
@@ -287,6 +320,52 @@ const ProcessesView = ({ snapshotData, threadsData, searchQuery, hostname }) => 
                                                 <span className="badge badge-secondary">
                                                     {selectedGraphThreads.length} threads
                                                 </span>
+                                            </div>
+                                            {graphNodeLoadingPid === graphSelectedProcess.pid && (
+                                                <div className="details-inline-note">
+                                                    Loading full details for PID {graphSelectedProcess.pid}...
+                                                </div>
+                                            )}
+                                            {graphNodeError && (
+                                                <div className="error-state">
+                                                    <strong>Error:</strong> {graphNodeError}
+                                                </div>
+                                            )}
+                                            <div className="details-section">
+                                                <div className="details-label">Parents</div>
+                                                {(graphSelectedProcess.parents || []).length > 0 ? (
+                                                    <div className="thread-list">
+                                                        {(graphSelectedProcess.parents || []).map((parent, idx) => (
+                                                            <div
+                                                                key={`${graphSelectedProcess.pid}-parent-${parent.pid}-${idx}`}
+                                                                className="thread-row"
+                                                            >
+                                                                <span className="thread-tid">PID {parent.pid}</span>
+                                                                <span className="thread-comm">{parent.comm}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="thread-empty">No parents found.</div>
+                                                )}
+                                            </div>
+                                            <div className="details-section">
+                                                <div className="details-label">Children</div>
+                                                {(graphSelectedProcess.children || []).length > 0 ? (
+                                                    <div className="thread-list">
+                                                        {(graphSelectedProcess.children || []).map((child, idx) => (
+                                                            <div
+                                                                key={`${graphSelectedProcess.pid}-child-${child.pid}-${idx}`}
+                                                                className="thread-row"
+                                                            >
+                                                                <span className="thread-tid">PID {child.pid}</span>
+                                                                <span className="thread-comm">{child.comm}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="thread-empty">No children found.</div>
+                                                )}
                                             </div>
                                             <div className="details-section">
                                                 <div className="details-label">Threads from walker -t</div>

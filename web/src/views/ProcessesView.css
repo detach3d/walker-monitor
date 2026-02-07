@@ -211,6 +211,15 @@
     gap: 8px;
 }
 
+.details-inline-note {
+    font-size: 0.75rem;
+    color: var(--accent-primary-light);
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+}
+
 .details-section {
     border-top: 1px solid var(--border-color);
     padding-top: 12px;
