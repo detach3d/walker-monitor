@@ -1,0 +1,286 @@
+/* MemoryView - Enterprise Security Platform Style */
+
+.memory-view {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* View Header */
+.memory-view .view-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.memory-view .view-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.memory-view .view-title::before {
+    content: '🧠';
+    font-size: 1.125rem;
+}
+
+.memory-view .timestamp {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+}
+
+/* Summary Cards */
+.memory-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.summary-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.summary-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary);
+}
+
+.summary-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+/* Table Wrapper */
+.memory-view .table-wrapper {
+    flex: 1;
+    overflow: auto;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+}
+
+.memory-view table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.memory-view thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-tertiary);
+}
+
+.memory-view th {
+    text-align: left;
+    padding: 14px 16px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+    user-select: none;
+}
+
+.memory-view th[style*="cursor: pointer"]:hover {
+    color: var(--accent-primary-light);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.memory-view th svg {
+    vertical-align: middle;
+    margin-left: 4px;
+    color: var(--accent-primary);
+}
+
+.memory-view tbody tr {
+    transition: background var(--transition-fast);
+}
+
+.memory-view tbody tr:hover {
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.memory-view td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    vertical-align: middle;
+}
+
+.memory-view tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* PID Cell */
+.memory-view .process-pid {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: var(--accent-primary-light);
+    background: var(--bg-secondary);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    display: inline-block;
+}
+
+/* Memory Values */
+.memory-view .mem-value {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 500;
+}
+
+/* State Badges */
+.state-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    gap: 4px;
+}
+
+.state-running {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.state-sleeping {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent-primary-light);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.state-disk {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.state-stopped {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.state-zombie {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.state-other {
+    background: rgba(107, 114, 128, 0.15);
+    color: var(--text-tertiary);
+    border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+/* Memory Usage Bar */
+.usage-cell {
+    min-width: 120px;
+}
+
+.mem-bar {
+    width: 100%;
+    height: 6px;
+    background: var(--bg-secondary);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.mem-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary-light));
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+/* Empty State */
+.memory-view .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    padding: 60px 40px;
+}
+
+.memory-view .empty-state-icon {
+    font-size: 3rem;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.memory-view .empty-state-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.memory-view .empty-state-description {
+    font-size: 0.875rem;
+    color: var(--text-tertiary);
+    max-width: 320px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .memory-view th,
+    .memory-view td {
+        padding: 10px 12px;
+    }
+
+    .memory-view table {
+        font-size: 0.75rem;
+    }
+
+    .memory-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .memory-view .view-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .memory-summary {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .memory-view th:nth-child(6),
+    .memory-view td:nth-child(6),
+    .memory-view th:nth-child(7),
+    .memory-view td:nth-child(7) {
+        display: none;
+    }
+}

@@ -14,7 +14,12 @@
 #include <linux/sched/cputime.h>
 #include <linux/sched.h>
 #include <linux/cpumask.h>
+#include <linux/mutex.h>
 #include <linux/file.h>
+#include <linux/mm.h>
+#include <linux/mnt_namespace.h>
+#include <linux/utsname.h>
+#include <linux/ipc_namespace.h>
 #include "task_walker.h"
 
 MODULE_LICENSE("GPL");
@@ -52,6 +57,20 @@ static ssize_t sock_walker_write(struct file *file,
 								 size_t length,
 								 loff_t *offset);
 
+static ssize_t memory_walker_write(struct file *file,
+								   char __user *buffer,
+								   size_t length,
+								   loff_t *offset);
+
+static ssize_t anomalies_walker_write(struct file *file,
+									  char __user *buffer,
+									  size_t length,
+									  loff_t *offset);
+
+void get_exe_path(struct task_struct *task,
+				  char *buf,
+				  int buflen);
+
 void get_file_path_current(struct task_struct *task,
 						   char *buf,
 						   int buflen);
@@ -75,6 +94,10 @@ static char message_buf_for_fdt[524288];
 static char message_buf_for_threads[262144];
 static char message_buf_for_CPU[131072];
 static char message_buf_for_sock[524288];
+static char message_buf_for_memory[524288];
+static char message_buf_for_anomalies[1048576];
+
+DEFINE_MUTEX(mutex_for_message);
 
 static struct file_operations g_fops = {
 	.owner = THIS_MODULE,
@@ -125,6 +148,7 @@ static long device_ioctl(struct file *file,
 						 unsigned int ioctl_num,
 						 unsigned long ioctl_param)
 {
+	mutex_lock(&mutex_for_message);
 	switch (ioctl_num)
 	{
 	case IOC_WALK_PROCS:
@@ -133,6 +157,7 @@ static long device_ioctl(struct file *file,
 
 		if (copy_to_user((char __user *)ioctl_param, Message_Ptr, strlen(Message_Ptr) + 1))
 		{
+			mutex_unlock(&mutex_for_message);
 			printk(KERN_ERR "Failed to copy data to user space\n");
 			return -EFAULT;
 		}
@@ -143,6 +168,7 @@ static long device_ioctl(struct file *file,
 
 		if (copy_to_user((char __user *)ioctl_param, Message_Ptr, strlen(Message_Ptr) + 1))
 		{
+			mutex_unlock(&mutex_for_message);
 			printk(KERN_ERR "Failed to copy data to user space\n");
 			return -EFAULT;
 		}
@@ -153,6 +179,7 @@ static long device_ioctl(struct file *file,
 
 		if (copy_to_user((char __user *)ioctl_param, Message_Ptr, strlen(Message_Ptr) + 1))
 		{
+			mutex_unlock(&mutex_for_message);
 			printk(KERN_ERR "Failed to copy data to user space\n");
 			return -EFAULT;
 		}
@@ -163,24 +190,50 @@ static long device_ioctl(struct file *file,
 
 		if (copy_to_user((char __user *)ioctl_param, Message_Ptr, strlen(Message_Ptr) + 1))
 		{
+			mutex_unlock(&mutex_for_message);
 			printk(KERN_ERR "Failed to copy data to user space\n");
 			return -EFAULT;
 		}
 		break;
 	case IOC_WALK_SOCK:
-		printk(KERN_INFO "ioctl: Walking CPU info...\n");
+		printk(KERN_INFO "ioctl: Walking network info...\n");
 		sock_walker_write(file, NULL, 0, 0);
 
 		if (copy_to_user((char __user *)ioctl_param, Message_Ptr, strlen(Message_Ptr) + 1))
 		{
+			mutex_unlock(&mutex_for_message);
+			printk(KERN_ERR "Failed to copy data to user space\n");
+			return -EFAULT;
+		}
+		break;
+	case IOC_WALK_MEMORY:
+		printk(KERN_INFO "ioctl: Walking memory info...\n");
+		memory_walker_write(file, NULL, 0, 0);
+
+		if (copy_to_user((char __user *)ioctl_param, Message_Ptr, strlen(Message_Ptr) + 1))
+		{
+			mutex_unlock(&mutex_for_message);
+			printk(KERN_ERR "Failed to copy data to user space\n");
+			return -EFAULT;
+		}
+		break;
+	case IOC_WALK_ANOMALIES:
+		printk(KERN_INFO "ioctl: Walking anomaly info...\n");
+		anomalies_walker_write(file, NULL, 0, 0);
+
+		if (copy_to_user((char __user *)ioctl_param, Message_Ptr, strlen(Message_Ptr) + 1))
+		{
+			mutex_unlock(&mutex_for_message);
 			printk(KERN_ERR "Failed to copy data to user space\n");
 			return -EFAULT;
 		}
 		break;
 	default:
+		mutex_unlock(&mutex_for_message);
 		printk(KERN_INFO "ioctl: Unknown command\n");
 		return -ENOTTY;
 	}
+	mutex_unlock(&mutex_for_message);
 	return 0;
 }
 
@@ -214,30 +267,20 @@ static ssize_t fdt_walker_write(struct file *file,
 						 "PID: %d | Comm: %s\n",
 						 task->pid, task->comm);
 
-		if (bytes < remaining)
-		{
-			offset_buf += bytes;
-			remaining -= bytes;
-			// pr_info("%s", message_buf_for_procs + offset_buf - bytes);
-		}
-		else
-		{
+		if (bytes <= 0 || bytes >= remaining)
 			break;
-		}
+
+		offset_buf += bytes;
+		remaining -= bytes;
 
 		bytes = snprintf(message_buf_for_fdt + offset_buf, remaining,
 						 "FILE PATH: %s\n", message_buf_for_files);
 
-		if (bytes < remaining)
-		{
-			offset_buf += bytes;
-			remaining -= bytes;
-			// pr_info("%s", message_buf_for_procs + offset_buf - bytes);
-		}
-		else
-		{
+		if (bytes <= 0 || bytes >= remaining)
 			break;
-		}
+
+		offset_buf += bytes;
+		remaining -= bytes;
 	}
 	rcu_read_unlock();
 
@@ -325,32 +368,24 @@ static ssize_t thread_walker_write(struct file *file,
 		int bytes = snprintf(message_buf_for_threads + offset_buf, remaining,
 							 "PID: %d | Comm: %s\n",
 							 proc->pid, proc->comm);
-		if (bytes < remaining)
-		{
-			offset_buf += bytes;
-			remaining -= bytes;
-			// pr_info("%s", message_buf_for_threads + offset_buf - bytes);
-		}
-		else
-		{
+
+		if (bytes <= 0 || bytes >= remaining)
 			break;
-		}
+
+		offset_buf += bytes;
+		remaining -= bytes;
+
 		for_each_thread(proc, thread)
 		{
 			bytes = snprintf(message_buf_for_threads + offset_buf, remaining,
 							 "	THREAD: %d | Comm: %s\n",
 							 thread->pid, thread->comm);
 
-			if (bytes < remaining)
-			{
-				offset_buf += bytes;
-				remaining -= bytes;
-				// pr_info("%s", message_buf_for_threads + offset_buf - bytes);
-			}
-			else
-			{
+			if (bytes <= 0 || bytes >= remaining)
 				break;
-			}
+
+			offset_buf += bytes;
+			remaining -= bytes;
 		}
 	}
 	rcu_read_unlock();
@@ -370,7 +405,7 @@ static ssize_t CPU_walker_write(struct file *file,
 	int remaining = sizeof(message_buf_for_CPU) - 1;
 
 	// Get online CPU count
-	int online_cpus = num_online_cpus();
+	int online_cpus = max(1, num_online_cpus());
 
 	printk(KERN_INFO "Walking through the CPU info...\n");
 
@@ -453,59 +488,336 @@ static ssize_t sock_walker_write(struct file *file,
 	return offset_buf;
 }
 
+static ssize_t memory_walker_write(struct file *file,
+								   char __user *buffer,
+								   size_t length,
+								   loff_t *offset)
+{
+	struct task_struct *task;
+	int offset_buf = 0;
+	int remaining = sizeof(message_buf_for_memory) - 1;
+
+	unsigned long rss_pages;
+	unsigned long rss_bytes;
+	unsigned long file_pages;
+	unsigned long shm_pages;
+
+	unsigned long shr_pages;
+	unsigned long shr_bytes;
+
+	unsigned long virt_kb;
+
+	struct mm_struct *mm;
+
+	printk(KERN_INFO "Walking through the memory info...\n");
+
+	rcu_read_lock();
+	for_each_process(task)
+	{
+		get_task_struct(task); // pin task to prevent it from being freed while we access it
+		char state = task_state_to_char(task);
+
+		mm = get_task_mm(task); // pin memory to prevent it from being freed while we access it
+
+		if (!mm)
+		{
+			put_task_struct(task); // unpin task
+			goto no_memory;
+		}
+
+		// Resident memory
+		rss_pages = get_mm_rss(mm);
+		rss_bytes = rss_pages * PAGE_SIZE;
+
+		// Shared memory
+		file_pages = get_mm_counter(mm, MM_FILEPAGES);
+		shm_pages = get_mm_counter(mm, MM_SHMEMPAGES);
+
+		shr_pages = file_pages + shm_pages;
+		shr_bytes = shr_pages * PAGE_SIZE;
+
+		// Virt Memory
+		virt_kb = mm->total_vm * PAGE_SIZE;
+
+		mmput(mm);
+
+		int bytes = snprintf(message_buf_for_memory + offset_buf, remaining,
+							 "PID: %d | COMM: %s\n\
+STATE: %c | VIRTUAL MEM: %lu KB | RESIDENT MEM: %lu KB | SHARED MEM: %lu KB\n",
+							 task->pid, task->comm,
+							 state, virt_kb >> 10, rss_bytes >> 10, shr_bytes >> 10);
+
+		if (bytes <= 0 || bytes >= remaining)
+		{
+			put_task_struct(task); // unpin task
+			break;
+		}
+		offset_buf += bytes;
+		remaining -= bytes;
+
+		put_task_struct(task); // unpin task
+	no_memory:
+	}
+	rcu_read_unlock();
+
+	message_buf_for_memory[offset_buf] = '\0';
+	Message_Ptr = message_buf_for_memory;
+	return offset_buf;
+}
+
+static ssize_t anomalies_walker_write(struct file *file,
+									  char __user *buffer,
+									  size_t length,
+									  loff_t *offset)
+{
+	struct task_struct *proc;
+	struct task_struct *thread;
+	int offset_buf = 0;
+	int remaining = sizeof(message_buf_for_anomalies) - 1;
+	const struct cred *init_cred;
+
+	printk(KERN_INFO "Walking through the anomalies...\n");
+
+	rcu_read_lock();
+	for_each_process(proc)
+	{
+		if(proc->pid == 1) {
+			init_cred = __task_cred(proc);
+		}
+
+		int bytes = snprintf(message_buf_for_anomalies + offset_buf, remaining,
+							 "PID: %d | Comm: %s\n",
+							 proc->pid, proc->comm);
+
+		if (bytes <= 0 || bytes >= remaining)
+			break;
+
+		offset_buf += bytes;
+		remaining -= bytes;
+
+		// --------------------------------------------
+		// this for is for unlinked executables, which can be a sign of malicious activity.
+		// We want to get the exe path for each thread, as some threads might have different
+		// exe paths due to execve calls.
+		for_each_thread(proc, thread)
+		{
+			static char message_buf_for_exe_path[16384];
+
+			get_exe_path(thread, message_buf_for_exe_path, sizeof(message_buf_for_exe_path));
+
+			bytes = snprintf(message_buf_for_anomalies + offset_buf, remaining,
+							 "	Thread info: %d | Comm: %s\n\
+		%s\n", /*exe path*/
+							 thread->pid, thread->comm,
+							 message_buf_for_exe_path);
+
+			if (bytes <= 0 || bytes >= remaining)
+				break;
+
+			offset_buf += bytes;
+			remaining -= bytes;
+		}
+
+		// --------------------------------------------
+		// Check for namespace anomalies, which can be a sign of container escape attempts.
+		{
+			struct nsproxy *ns = proc->nsproxy;
+
+			if (ns)
+			{
+
+				bytes = scnprintf(message_buf_for_anomalies + offset_buf, remaining,
+                  "	Namespace info:\n\
+	mnt:[%u]\n\
+	pid:[%u]\n\
+	net:[%u]\n\
+	uts:[%u]\n\
+	ipc:[%u]\n\
+	user:[%u]\n\
+	cgroup:[%u]\n\
+	depth: [%u]\n",
+                  ((struct ns_common *)ns->mnt_ns)->inum,
+                  ns->pid_ns_for_children->ns.inum,
+                  ns->net_ns->ns.inum,
+                  ns->uts_ns->ns.inum,
+                  ns->ipc_ns->ns.inum,
+                  __task_cred(proc)->user_ns->ns.inum,
+                  ns->cgroup_ns->ns.inum,
+				  ns->pid_ns_for_children->level);
+
+				if (bytes <= 0 || bytes >= remaining)
+					break;
+
+				offset_buf += bytes;
+				remaining -= bytes;
+				// printk(KERN_INFO "%s\n", buf);
+			}
+		}
+	
+		// --------------------------------------------
+		// Privilege escalation detection. A process running as root that was spawned 
+		// by a non-root parent is suspicious.
+		{
+			const struct task_struct *parent_proc = rcu_dereference(proc->real_parent);
+
+			const struct cred *current_cred = __task_cred(proc);
+			const struct cred *parent_cred = __task_cred(parent_proc);
+
+			if (current_cred->euid.val == 0 && parent_cred->euid.val != 0)
+			{
+				char * root_info = current_cred->user_ns == init_cred->user_ns ? "yes" : "no"; 
+				
+				bytes = scnprintf(message_buf_for_anomalies + offset_buf, remaining,
+								 "\n	Privesc info:\n\
+	Possible privilege escalation detected!\n\
+	Is current process in the same user namespace as init? %s\n\
+	Parent PID: %d | Parent Comm: %s | Parent UID: %d\n\
+	Current PID: %d | Current Comm: %s | Current UID: %d\n",
+								 root_info,
+								 parent_proc->pid, parent_proc->comm, parent_cred->euid.val,
+								 proc->pid, proc->comm, current_cred->euid.val);
+
+				if (bytes <= 0 || bytes >= remaining)
+					break;
+
+				offset_buf += bytes;
+				remaining -= bytes;
+			}
+		}
+	
+	}
+	rcu_read_unlock();
+
+	message_buf_for_anomalies[offset_buf] = '\0';
+	Message_Ptr = message_buf_for_anomalies;
+	return offset_buf;
+}
+
+void get_exe_path(struct task_struct *task, char *buf, int buflen)
+{
+	struct file *exe_file = NULL;
+	int offset_buf = 0;
+
+	struct mm_struct *mm = get_task_mm(task);
+	if (!mm)
+	{
+		pr_info("No memory struct for PID %d\n", task->pid);
+		buf[offset_buf] = '\0';
+		return;
+	}
+
+	exe_file = rcu_dereference(mm->exe_file);
+
+	if (exe_file)
+	{
+		get_file(exe_file);
+	}
+	else
+	{
+		buf[offset_buf] = '\0';
+		mmput(mm);
+		return;
+	}
+	mmput(mm);
+
+	char *temp_buf = (char *)kmalloc(8192, GFP_ATOMIC);
+	if (!temp_buf)
+	{
+		pr_err("Failed to allocate memory for temp_buf\n");
+		fput(exe_file);
+		buf[offset_buf] = '\0';
+		return;
+	}
+
+	if (exe_file)
+	{
+		char *path = d_path(&exe_file->f_path, temp_buf, 8192);
+		fput(exe_file);
+
+		if (!IS_ERR(path))
+		{
+			int bytes = snprintf(buf + offset_buf, buflen,
+								 "Executable path: %s\n", path);
+
+			// pr_info("Executable path for PID %d: %s\n", task->pid, path);
+
+			if (bytes >= buflen)
+			{
+				kfree(temp_buf);
+				buf[offset_buf] = '\0';
+				return;
+			}
+
+			offset_buf += bytes;
+			buflen -= bytes;
+		}
+		else
+		{
+			// pr_info("exec path error\n");
+		}
+	}
+	kfree(temp_buf);
+	buf[offset_buf] = '\0';
+}
+
 void get_file_path_current(struct task_struct *task, char *buf, int buflen)
 {
 	struct file *file_obj;
 	int i;
 	int offset_buf = 0;
-	struct files_struct *files = task->files;
+	struct files_struct *files = rcu_dereference(task->files);
 	struct fdtable *fdt;
 
-	if (!files)
+	// temp buffer for d_path, as it can modify the input buffer
+	char *temp_buf = (char *)kmalloc(65536, GFP_ATOMIC);
+	if (temp_buf == NULL)
+	{
+		pr_err("Failed to allocate memory for temp_buf\n");
+		buf[offset_buf] = '\0';
 		return;
+	}
+
+	if (!files)
+	{
+		kfree(temp_buf);
+		buf[offset_buf] = '\0';
+		return;
+	}
 
 	fdt = files_fdtable(files);
 
 	for (i = 0; i < fdt->max_fds; i++)
 	{
-		file_obj = fdt->fd[i];
+		spin_lock(&files->file_lock);
+		file_obj = rcu_dereference_raw(fdt->fd[i]);
 		if (file_obj)
 		{
-			char *path = d_path(&file_obj->f_path, buf, buflen);
-
+			get_file(file_obj); // pin file to prevent it from being freed while we access it
+			spin_unlock(&files->file_lock);
+			char *path = d_path(&file_obj->f_path, temp_buf, buflen);
+			fput(file_obj); // unpin file
 			if (!IS_ERR(path))
 			{
 				int bytes = snprintf(buf + offset_buf, buflen,
 									 "File path for %i: %s\n", i, path);
 
-				if (bytes < buflen)
-				{
-					offset_buf += bytes;
-					buflen -= bytes;
-				}
-				else
-				{
+				if (bytes >= buflen)
 					break;
-				}
+
+				offset_buf += bytes;
+				buflen -= bytes;
 			}
 			else
 			{
 				pr_info("FD %d: <d_path error %ld>\n", i, PTR_ERR(path));
 			}
 		}
-		else if (i == 0)
+		else
 		{
-			int bytes = snprintf(buf + offset_buf, buflen,
-								 "No files for this process\n");
-
-			if (bytes < buflen)
-			{
-				offset_buf += bytes;
-				buflen -= bytes;
-			}
-			break;
+			spin_unlock(&files->file_lock);
 		}
 	}
+	kfree(temp_buf);
 	// pr_info("%s\n", buf);
 	buf[offset_buf] = '\0';
 }
@@ -514,8 +826,14 @@ void get_sock_current(struct task_struct *task, char *buf, int buflen)
 {
 	int i;
 	int offset_buf = 0;
-	struct files_struct *files = task->files;
+	int remaining = buflen;
+	struct files_struct *files = rcu_dereference(task->files);
 	struct fdtable *fdt;
+
+	if (!buf || buflen <= 0)
+		return;
+
+	buf[0] = '\0';
 
 	if (!files)
 		return;
@@ -527,17 +845,28 @@ void get_sock_current(struct task_struct *task, char *buf, int buflen)
 
 	for (i = 0; i < fdt->max_fds; i++)
 	{
-		struct file *file_obj;
-		struct socket *sock;
-		struct sock *sk;
+		struct file *file_obj = NULL;
+		struct socket *sock = NULL;
+		struct sock *sk = NULL;
+		int bytes = 0;
 
-		file_obj = fdt->fd[i];
-
+		spin_lock(&files->file_lock);
+		file_obj = rcu_dereference_raw(fdt->fd[i]);
 		if (file_obj)
-			sock = sock_from_file(file_obj);
+			get_file(file_obj); // pin file to safely inspect socket
+		spin_unlock(&files->file_lock);
 
-		if (sock)
-			sk = sock->sk;
+		if (!file_obj)
+			continue;
+
+		sock = sock_from_file(file_obj);
+		if (!sock)
+		{
+			fput(file_obj); // unpin non-socket file
+			continue;
+		}
+
+		sk = sock->sk;
 
 		if (sk)
 		{
@@ -556,19 +885,10 @@ void get_sock_current(struct task_struct *task, char *buf, int buflen)
 				snprintf(src, sizeof(src), "%pI4", &saddr);
 				snprintf(dst, sizeof(dst), "%pI4", &daddr);
 
-				int bytes = snprintf(buf + offset_buf, buflen,
-									 "File desc %d: %s:%u -> %s:%u\n",
-									 i, src, sport, dst, dport);
-
-				if (bytes < buflen)
-				{
-					offset_buf += bytes;
-					buflen -= bytes;
-				}
-				else
-				{
-					break;
-				}
+				bytes = snprintf(buf + offset_buf, remaining,
+								 "FD %d: family=%d type=%d state=%d %s:%u -> %s:%u\n",
+								 i, sk->sk_family, sock->type, sk->sk_state,
+								 src, sport, dst, dport);
 
 				break;
 			}
@@ -581,33 +901,50 @@ void get_sock_current(struct task_struct *task, char *buf, int buflen)
 				__u16 sport = inet->inet_num;		   /* host order */
 				__u16 dport = ntohs(inet->inet_dport); /* network -> host */
 
-				char src[16], dst[16];
+				char src[48], dst[48];
 
 				snprintf(src, sizeof(src), "%pI6c", saddr6);
 				snprintf(dst, sizeof(dst), "%pI6c", daddr6);
 
-				int bytes = snprintf(buf + offset_buf, buflen,
-									 "File desc %d: [%s]:%u -> [%s]:%u\n",
-									 i, src, sport, dst, dport);
-
-				if (bytes < buflen)
-				{
-					offset_buf += bytes;
-					buflen -= bytes;
-				}
-				else
-				{
-					break;
-				}
+				bytes = snprintf(buf + offset_buf, remaining,
+								 "FD %d: family=%d type=%d state=%d [%s]:%u -> [%s]:%u\n",
+								 i, sk->sk_family, sock->type, sk->sk_state,
+								 src, sport, dst, dport);
 
 				break;
 			}
 			default:
-				/* AF_UNIX, AF_NETLINK, etc. */
-				//pr_info("non-INET socket family=%d\n", sk->sk_family);
+				/* Include every other family (AF_UNIX, AF_NETLINK, etc.). */
+				bytes = snprintf(buf + offset_buf, remaining,
+								 "FD %d: family=%d type=%d state=%d\n",
+								 i, sk->sk_family, sock->type, sk->sk_state);
 				break;
 			}
+
+			if (bytes <= 0 || bytes >= remaining)
+			{
+				fput(file_obj); // unpin file
+				break;
+			}
+
+			offset_buf += bytes;
+			remaining -= bytes;
 		}
+		else
+		{
+			bytes = snprintf(buf + offset_buf, remaining,
+							 "FD %d: family=unknown type=%d state=unknown\n",
+							 i, sock->type);
+			if (bytes <= 0 || bytes >= remaining)
+			{
+				fput(file_obj); // unpin file
+				break;
+			}
+			offset_buf += bytes;
+			remaining -= bytes;
+		}
+
+		fput(file_obj); // unpin file
 	}
 
 	buf[offset_buf] = '\0';

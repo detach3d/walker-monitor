@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiServer, FiFileText, FiCpu, FiGrid, FiWifi } from 'react-icons/fi';
+import { FiServer, FiFileText, FiCpu, FiGrid, FiWifi, FiDatabase, FiAlertTriangle } from 'react-icons/fi';
 import './Sidebar.css';
 
 const Sidebar = ({ activeView, onViewChange }) => {
@@ -9,6 +9,8 @@ const Sidebar = ({ activeView, onViewChange }) => {
         { id: 'fdt', label: 'File Descriptors', icon: FiFileText },
         { id: 'network', label: 'Network', icon: FiWifi },
         { id: 'cpu', label: 'CPU', icon: FiCpu },
+        { id: 'memory', label: 'Memory', icon: FiDatabase },
+        { id: 'anomalies', label: 'Anomalies', icon: FiAlertTriangle },
     ];
 
     return (

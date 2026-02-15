@@ -210,7 +210,7 @@
     color: var(--text-secondary);
 }
 
-.socket-state.connected {
+.socket-state.established {
     color: var(--accent-primary-light);
     border-color: rgba(59, 130, 246, 0.4);
     background: rgba(59, 130, 246, 0.12);
@@ -220,6 +220,30 @@
     color: var(--status-warning);
     border-color: rgba(245, 158, 11, 0.4);
     background: rgba(245, 158, 11, 0.12);
+}
+
+.socket-state.close,
+.socket-state.close_wait,
+.socket-state.last_ack {
+    color: var(--text-tertiary);
+    border-color: rgba(107, 114, 128, 0.4);
+    background: rgba(107, 114, 128, 0.12);
+}
+
+.socket-state.syn_sent,
+.socket-state.syn_recv {
+    color: #4ade80;
+    border-color: rgba(34, 197, 94, 0.4);
+    background: rgba(34, 197, 94, 0.12);
+}
+
+.socket-state.fin_wait1,
+.socket-state.fin_wait2,
+.socket-state.time_wait,
+.socket-state.closing {
+    color: #c084fc;
+    border-color: rgba(168, 85, 247, 0.4);
+    background: rgba(168, 85, 247, 0.12);
 }
 
 .socket-state.unknown {

@@ -346,6 +346,48 @@ app.get('/api/hosts/:hostname/network', async (req, res) => {
 });
 
 /**
+ * GET /api/hosts/:hostname/memory
+ * Get memory info from host
+ */
+app.get('/api/hosts/:hostname/memory', async (req, res) => {
+    const { hostname } = req.params;
+
+    const host = hosts.get(hostname);
+    if (!host) {
+        return res.status(404).json({ error: 'Host not found' });
+    }
+
+    const result = await fetchFromAgent(host, '/memory');
+
+    if (!result.success) {
+        return res.status(503).json({ error: result.error });
+    }
+
+    res.json(result.data);
+});
+
+/**
+ * GET /api/hosts/:hostname/anomalies
+ * Get anomalies info from host
+ */
+app.get('/api/hosts/:hostname/anomalies', async (req, res) => {
+    const { hostname } = req.params;
+
+    const host = hosts.get(hostname);
+    if (!host) {
+        return res.status(404).json({ error: 'Host not found' });
+    }
+
+    const result = await fetchFromAgent(host, '/anomalies');
+
+    if (!result.success) {
+        return res.status(503).json({ error: result.error });
+    }
+
+    res.json(result.data);
+});
+
+/**
  * GET /api/hosts/:hostname/refresh
  * Trigger fresh snapshot on host
  */

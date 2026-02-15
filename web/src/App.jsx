@@ -8,6 +8,8 @@ import ProcessesView from './views/ProcessesView';
 import FileDescriptorsView from './views/FileDescriptorsView';
 import NetworkView from './views/NetworkView';
 import CPUView from './views/CPUView';
+import MemoryView from './views/MemoryView';
+import AnomaliesView from './views/AnomaliesView';
 import { api } from './api/client';
 import './styles/App.css';
 
@@ -27,6 +29,8 @@ function App() {
   const [fdtData, setFdtData] = useState(null);
   const [networkData, setNetworkData] = useState(null);
   const [cpuData, setCpuData] = useState(null);
+  const [memoryData, setMemoryData] = useState(null);
+  const [anomaliesData, setAnomaliesData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -94,6 +98,12 @@ function App() {
       } else if (view === 'cpu') {
         const cpu = await api.getCPU(hostname);
         setCpuData(cpu);
+      } else if (view === 'memory') {
+        const memory = await api.getMemory(hostname);
+        setMemoryData(memory);
+      } else if (view === 'anomalies') {
+        const anomalies = await api.getAnomalies(hostname);
+        setAnomaliesData(anomalies);
       }
     } catch (err) {
       setError(err.message);
@@ -134,6 +144,8 @@ function App() {
     setFdtData(null);
     setNetworkData(null);
     setCpuData(null);
+    setMemoryData(null);
+    setAnomaliesData(null);
   };
 
   const handleHostUpdated = async (oldName, newName) => {
@@ -217,6 +229,20 @@ function App() {
               {activeView === 'cpu' && (
                 <CPUView
                   cpuData={cpuData}
+                  searchQuery={searchQuery}
+                />
+              )}
+
+              {activeView === 'memory' && (
+                <MemoryView
+                  memoryData={memoryData}
+                  searchQuery={searchQuery}
+                />
+              )}
+
+              {activeView === 'anomalies' && (
+                <AnomaliesView
+                  anomaliesData={anomaliesData}
                   searchQuery={searchQuery}
                 />
               )}

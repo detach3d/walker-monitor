@@ -357,57 +357,142 @@ def parse_cpu_snapshot(raw_output):
     return processes
 
 
+def parse_memory_snapshot(raw_output):
+    """
+    Parse walker -m output into structured JSON
+
+    Format (two lines per process):
+    PID: 1 | COMM: systemd
+    STATE: S | VIRTUAL MEM: 21952 KB | RESIDENT MEM: 11892 KB | SHARED MEM: 8436 KB
+    """
+    processes = []
+    lines = raw_output.split('\n')
+    i = 0
+
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line:
+            i += 1
+            continue
+
+        proc_match = re.match(r'^PID: (\d+) \| COMM: (.+)$', line)
+        if proc_match:
+            process = {
+                'pid': int(proc_match.group(1)),
+                'comm': proc_match.group(2)
+            }
+
+            if i + 1 < len(lines):
+                mem_line = lines[i + 1].strip()
+                mem_match = re.match(
+                    r'^STATE: (\S+) \| VIRTUAL MEM: (\d+) KB \| RESIDENT MEM: (\d+) KB \| SHARED MEM: (\d+) KB$',
+                    mem_line
+                )
+                if mem_match:
+                    process['state'] = mem_match.group(1)
+                    process['virtual_kb'] = int(mem_match.group(2))
+                    process['resident_kb'] = int(mem_match.group(3))
+                    process['shared_kb'] = int(mem_match.group(4))
+                    processes.append(process)
+                    i += 2
+                    continue
+
+            i += 1
+        else:
+            i += 1
+
+    return processes
+
+
 def parse_socket_snapshot(raw_output):
     """
     Parse walker -s output into structured JSON
 
-    Format:
+    New format from driver:
     PID: 123 | Comm: processname
-    SOCKET INFO: File desc 4: 127.0.0.1:8080 -> 0.0.0.0:0
-    File desc 7: [::1]:5000 -> [::]:0
+    SOCKET INFO: FD 17: family=16 type=3 state=7
+    FD 99: family=2 type=1 state=10 0.0.0.0:22 -> 0.0.0.0:0
+    FD 100: family=10 type=1 state=10 [::]:22 -> [::]:0
     """
+    FAMILY_NAMES = {
+        1: 'AF_UNIX', 2: 'IPv4', 10: 'IPv6',
+        16: 'AF_NETLINK', 17: 'AF_PACKET'
+    }
+
+    SOCK_TYPE_NAMES = {
+        1: 'STREAM', 2: 'DGRAM', 3: 'RAW',
+        5: 'SEQPACKET'
+    }
+
+    TCP_STATE_NAMES = {
+        1: 'established', 2: 'syn_sent', 3: 'syn_recv',
+        4: 'fin_wait1', 5: 'fin_wait2', 6: 'time_wait',
+        7: 'close', 8: 'close_wait', 9: 'last_ack',
+        10: 'listening', 11: 'closing'
+    }
+
     def parse_endpoint(endpoint):
         endpoint = endpoint.strip()
 
         ipv6_match = re.match(r'^\[(.+)\]:(\d+)$', endpoint)
         if ipv6_match:
-            return ipv6_match.group(1), int(ipv6_match.group(2)), 'IPv6'
+            return ipv6_match.group(1), int(ipv6_match.group(2))
 
         ipv4_match = re.match(r'^(.+):(\d+)$', endpoint)
         if ipv4_match:
-            return ipv4_match.group(1), int(ipv4_match.group(2)), 'IPv4'
+            return ipv4_match.group(1), int(ipv4_match.group(2))
 
-        return endpoint, None, 'Unknown'
+        return endpoint, None
 
     def parse_socket_line(line):
-        socket_match = re.match(r'^File desc (\d+): (.+)$', line.strip())
-        if not socket_match:
+        line = line.strip()
+
+        # Match: FD <num>: family=<num> type=<num> state=<num> [addr -> addr]
+        fd_match = re.match(
+            r'^FD (\d+): family=(\d+) type=(\d+) state=(\d+)\s*(.*)$', line
+        )
+        if not fd_match:
             return None
 
-        fd = int(socket_match.group(1))
-        mapping = socket_match.group(2)
-        endpoints = mapping.split(' -> ', 1)
-        if len(endpoints) != 2:
-            return None
+        fd = int(fd_match.group(1))
+        family_num = int(fd_match.group(2))
+        sock_type_num = int(fd_match.group(3))
+        state_num = int(fd_match.group(4))
+        rest = (fd_match.group(5) or '').strip()
 
-        local_raw, remote_raw = endpoints[0].strip(), endpoints[1].strip()
-        local_addr, local_port, local_family = parse_endpoint(local_raw)
-        remote_addr, remote_port, remote_family = parse_endpoint(remote_raw)
+        family = FAMILY_NAMES.get(family_num, f'family={family_num}')
+        sock_type = SOCK_TYPE_NAMES.get(sock_type_num, f'type={sock_type_num}')
+        state = TCP_STATE_NAMES.get(state_num, f'state={state_num}')
 
-        family = local_family if local_family == remote_family else 'Mixed'
-        socket_state = 'listening' if remote_port == 0 else 'connected'
-
-        return {
+        result = {
             'fd': fd,
-            'local': local_raw,
-            'remote': remote_raw,
-            'local_address': local_addr,
-            'local_port': local_port,
-            'remote_address': remote_addr,
-            'remote_port': remote_port,
             'family': family,
-            'state': socket_state
+            'sock_type': sock_type,
+            'state': state,
+            'local': '-',
+            'remote': '-',
+            'local_address': '-',
+            'local_port': None,
+            'remote_address': '-',
+            'remote_port': None,
         }
+
+        # Parse address endpoints if present (IPv4/IPv6 sockets)
+        if rest and ' -> ' in rest:
+            endpoints = rest.split(' -> ', 1)
+            local_raw = endpoints[0].strip()
+            remote_raw = endpoints[1].strip()
+            local_addr, local_port = parse_endpoint(local_raw)
+            remote_addr, remote_port = parse_endpoint(remote_raw)
+
+            result['local'] = local_raw
+            result['remote'] = remote_raw
+            result['local_address'] = local_addr
+            result['local_port'] = local_port
+            result['remote_address'] = remote_addr
+            result['remote_port'] = remote_port
+
+        return result
 
     processes = []
     current_process = None
@@ -439,13 +524,7 @@ def parse_socket_snapshot(raw_output):
             if first_socket_line:
                 parsed = parse_socket_line(first_socket_line)
                 if parsed:
-                    key = (
-                        parsed['fd'],
-                        parsed['local'],
-                        parsed['remote'],
-                        parsed['family'],
-                        parsed['state']
-                    )
+                    key = (parsed['fd'], parsed['family'], parsed['local'], parsed['remote'])
                     if key not in current_socket_keys:
                         current_socket_keys.add(key)
                         current_process['sockets'].append(parsed)
@@ -458,13 +537,7 @@ def parse_socket_snapshot(raw_output):
                 if next_line.strip():
                     parsed = parse_socket_line(next_line)
                     if parsed:
-                        key = (
-                            parsed['fd'],
-                            parsed['local'],
-                            parsed['remote'],
-                            parsed['family'],
-                            parsed['state']
-                        )
+                        key = (parsed['fd'], parsed['family'], parsed['local'], parsed['remote'])
                         if key not in current_socket_keys:
                             current_socket_keys.add(key)
                             current_process['sockets'].append(parsed)
@@ -475,6 +548,208 @@ def parse_socket_snapshot(raw_output):
 
     if current_process:
         processes.append(current_process)
+
+    return processes
+
+
+SUSPICIOUS_PATHS = ('/tmp/', '/dev/shm/', '/var/tmp/', '/run/shm/')
+
+def parse_anomalies_snapshot(raw_output):
+    """
+    Parse walker -a output into structured JSON
+
+    Format:
+    PID: 1 | Comm: systemd
+        Thread info: 1 | Comm: systemd
+            Executable path: /usr/lib/systemd/systemd
+
+        Namespace info:
+        mnt:[4026531841]
+        pid:[4026531836]
+        net:[4026531840]
+        uts:[4026531838]
+        ipc:[4026531839]
+        user:[4026531837]
+        cgroup:[4026531835]
+        depth: [0]
+    """
+    # Namespace inode numbers for the init (root) namespace — collected from PID 1
+    init_ns = {}
+
+    processes = []
+    current_process = None
+    current_thread = None
+    in_namespace_block = False
+    in_privesc_block = False
+
+    for line in raw_output.split('\n'):
+        stripped = line.strip()
+        if not stripped:
+            continue
+
+        # Match process line
+        proc_match = re.match(r'^PID: (\d+) \| Comm: (.+)$', stripped)
+        if proc_match:
+            if current_thread and current_process:
+                current_process['threads'].append(current_thread)
+            if current_process:
+                processes.append(current_process)
+            current_process = {
+                'pid': int(proc_match.group(1)),
+                'comm': proc_match.group(2),
+                'threads': [],
+                'flags': [],
+                'namespaces': {},
+                'privesc': None
+            }
+            current_thread = None
+            in_namespace_block = False
+            in_privesc_block = False
+            continue
+
+        # Match thread line
+        thread_match = re.match(r'^Thread info: (\d+) \| Comm: (.+)$', stripped)
+        if thread_match and current_process:
+            if current_thread:
+                current_process['threads'].append(current_thread)
+            current_thread = {
+                'tid': int(thread_match.group(1)),
+                'comm': thread_match.group(2),
+                'exe_path': None,
+                'flags': []
+            }
+            in_namespace_block = False
+            in_privesc_block = False
+            continue
+
+        # Match exe path line
+        exe_match = re.match(r'^Executable path: (.+)$', stripped)
+        if exe_match and current_thread:
+            path = exe_match.group(1)
+            current_thread['exe_path'] = path
+
+            # Flag deleted binaries
+            if '(deleted)' in path:
+                current_thread['flags'].append('deleted')
+                if 'deleted' not in current_process['flags']:
+                    current_process['flags'].append('deleted')
+
+            # Flag suspicious paths
+            if path.startswith('memfd:') or any(path.startswith(p) for p in SUSPICIOUS_PATHS):
+                current_thread['flags'].append('suspicious_path')
+                if 'suspicious_path' not in current_process['flags']:
+                    current_process['flags'].append('suspicious_path')
+
+            continue
+
+        # Namespace info block
+        if stripped == 'Namespace info:':
+            # Finalize last thread before namespace block
+            if current_thread and current_process:
+                current_process['threads'].append(current_thread)
+                current_thread = None
+            in_namespace_block = True
+            continue
+
+        if in_namespace_block and current_process:
+            # Match namespace lines: mnt:[4026531841], pid:[4026531836], etc.
+            ns_match = re.match(r'^(\w+):\[(\d+)\]$', stripped)
+            if ns_match:
+                ns_name = ns_match.group(1)
+                ns_inum = int(ns_match.group(2))
+                current_process['namespaces'][ns_name] = ns_inum
+                continue
+
+            # Match depth line: depth: [0]
+            depth_match = re.match(r'^depth: \[(\d+)\]$', stripped)
+            if depth_match:
+                current_process['namespaces']['depth'] = int(depth_match.group(1))
+                in_namespace_block = False
+                continue
+
+        # PrivEsc info block (handles both "PrivEsc info:" and "Privesc info:")
+        if stripped.lower() == 'privesc info:':
+            in_privesc_block = True
+            in_namespace_block = False
+            continue
+
+        if in_privesc_block and current_process:
+            # Match "Is current process in the same user namespace as init?" line
+            same_ns_match = re.match(
+                r'^Is current process in the same user namespace as init\? (.+)$', stripped
+            )
+            if same_ns_match:
+                current_process['privesc'] = current_process.get('privesc') or {}
+                current_process['privesc']['same_user_ns'] = same_ns_match.group(1).strip() == 'yes'
+                continue
+
+            # Match parent line: Parent PID: 123 | Parent Comm: bash | Parent UID: 1000
+            parent_match = re.match(
+                r'^Parent PID: (\d+) \| Parent Comm: (.+?) \| Parent UID: (\d+)$', stripped
+            )
+            if parent_match:
+                current_process['privesc'] = current_process.get('privesc') or {}
+                current_process['privesc']['parent_pid'] = int(parent_match.group(1))
+                current_process['privesc']['parent_comm'] = parent_match.group(2)
+                current_process['privesc']['parent_uid'] = int(parent_match.group(3))
+                continue
+
+            # Match current line: Current PID: 456 | Current Comm: su | Current UID: 0
+            current_match = re.match(
+                r'^Current PID: (\d+) \| Current Comm: (.+?) \| Current UID: (\d+)$', stripped
+            )
+            if current_match:
+                current_process['privesc'] = current_process.get('privesc') or {}
+                current_process['privesc']['current_uid'] = int(current_match.group(3))
+                if 'privesc' not in current_process['flags']:
+                    current_process['flags'].append('privesc')
+                in_privesc_block = False
+                continue
+
+            # Skip "Possible privilege escalation detected!" line
+            if 'privilege escalation' in stripped.lower():
+                continue
+
+    # Finalize last entries
+    if current_thread and current_process:
+        current_process['threads'].append(current_thread)
+    if current_process:
+        processes.append(current_process)
+
+    # Collect init namespace inums from PID 1
+    for proc in processes:
+        if proc['pid'] == 1 and proc['namespaces']:
+            init_ns = {k: v for k, v in proc['namespaces'].items() if k != 'depth'}
+            break
+
+    # Flag kernel-thread imposters and detect namespace anomalies
+    for proc in processes:
+        comm = proc['comm']
+        has_exe = any(t.get('exe_path') for t in proc['threads'])
+        is_kthread_name = (
+            comm.startswith('[') or
+            comm.startswith('kworker') or
+            comm.startswith('migration') or
+            comm.startswith('ksoftirqd') or
+            comm.startswith('kdevtmpfs') or
+            comm.startswith('rcu_')
+        )
+        no_exe = not has_exe
+
+        if is_kthread_name and has_exe:
+            proc['flags'].append('kthread_imposter')
+        if no_exe:
+            proc['flags'].append('kernel_thread')
+
+        # Flag processes in non-default namespaces
+        if init_ns and proc['namespaces']:
+            for ns_name, ns_inum in proc['namespaces'].items():
+                if ns_name == 'depth':
+                    continue
+                if ns_name in init_ns and ns_inum != init_ns[ns_name]:
+                    if 'non_default_ns' not in proc['flags']:
+                        proc['flags'].append('non_default_ns')
+                    break
 
     return processes
 
@@ -585,6 +860,38 @@ def network_snapshot():
         return jsonify({'error': error}), 500
 
     processes = parse_socket_snapshot(raw_output)
+
+    return jsonify({
+        'hostname': config.HOSTNAME,
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'processes': processes
+    })
+
+
+@app.route('/memory', methods=['GET'])
+def memory_snapshot():
+    """Get memory info (walker -m parsed to JSON)"""
+    raw_output, error = execute_walker('-m')
+    if error:
+        return jsonify({'error': error}), 500
+
+    processes = parse_memory_snapshot(raw_output)
+
+    return jsonify({
+        'hostname': config.HOSTNAME,
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'processes': processes
+    })
+
+
+@app.route('/anomalies', methods=['GET'])
+def anomalies_snapshot():
+    """Get anomalies info (walker -a parsed to JSON)"""
+    raw_output, error = execute_walker('-a')
+    if error:
+        return jsonify({'error': error}), 500
+
+    processes = parse_anomalies_snapshot(raw_output)
 
     return jsonify({
         'hostname': config.HOSTNAME,

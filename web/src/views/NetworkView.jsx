@@ -35,6 +35,7 @@ const NetworkView = ({ networkData, searchQuery }) => {
                 comm: proc.comm,
                 fd: sock.fd,
                 family: sock.family || 'Unknown',
+                sockType: sock.sock_type || '-',
                 state: sock.state || 'unknown',
                 local: sock.local || '-',
                 remote: sock.remote || '-',
@@ -48,11 +49,12 @@ const NetworkView = ({ networkData, searchQuery }) => {
 
     const groupedByConnection = new Map();
     allConnections.forEach((conn) => {
-        const groupKey = `${conn.family}|${conn.state}|${conn.local}|${conn.remote}`;
+        const groupKey = `${conn.family}|${conn.sockType}|${conn.state}|${conn.local}|${conn.remote}`;
         if (!groupedByConnection.has(groupKey)) {
             groupedByConnection.set(groupKey, {
                 id: groupKey,
                 family: conn.family,
+                sockType: conn.sockType,
                 state: conn.state,
                 local: conn.local,
                 remote: conn.remote,
@@ -72,8 +74,8 @@ const NetworkView = ({ networkData, searchQuery }) => {
     });
 
     const groupedConnections = [...groupedByConnection.values()].sort((a, b) => {
-        const stateRank = { connected: 0, listening: 1, unknown: 2 };
-        const byState = (stateRank[a.state] ?? 9) - (stateRank[b.state] ?? 9);
+        const stateRank = { established: 0, syn_sent: 1, syn_recv: 2, listening: 3, close_wait: 4, fin_wait1: 5, fin_wait2: 6, time_wait: 7, closing: 8, last_ack: 9, close: 10 };
+        const byState = (stateRank[a.state] ?? 99) - (stateRank[b.state] ?? 99);
         if (byState !== 0) return byState;
         const byOwners = b.owners.length - a.owners.length;
         if (byOwners !== 0) return byOwners;
@@ -87,6 +89,7 @@ const NetworkView = ({ networkData, searchQuery }) => {
             conn.local.toLowerCase().includes(normalizedQuery) ||
             conn.remote.toLowerCase().includes(normalizedQuery) ||
             conn.family.toLowerCase().includes(normalizedQuery) ||
+            conn.sockType.toLowerCase().includes(normalizedQuery) ||
             conn.state.toLowerCase().includes(normalizedQuery) ||
             conn.owners.some((owner) =>
                 owner.pid.toString().includes(normalizedQuery) ||
@@ -186,6 +189,7 @@ const NetworkView = ({ networkData, searchQuery }) => {
                                     </div>
                                     <div className="connection-meta">
                                         <span className="badge badge-secondary">{conn.family}</span>
+                                        <span className="badge badge-secondary">{conn.sockType}</span>
                                         <span className="badge badge-primary">{ownerCount} owner{ownerCount > 1 ? 's' : ''}</span>
                                         {leadOwner && <span className="badge badge-secondary">PID {leadOwner.pid}</span>}
                                         {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
@@ -208,8 +212,12 @@ const NetworkView = ({ networkData, searchQuery }) => {
                                                 <span className="detail-value">{conn.family}</span>
                                             </div>
                                             <div className="detail-item">
+                                                <span className="detail-label">Type</span>
+                                                <span className="detail-value">{conn.sockType}</span>
+                                            </div>
+                                            <div className="detail-item">
                                                 <span className="detail-label">State</span>
-                                                <span className="detail-value">{isListening ? 'listening' : conn.state}</span>
+                                                <span className="detail-value">{conn.state}</span>
                                             </div>
                                             <div className="detail-item">
                                                 <span className="detail-label">Local Address</span>

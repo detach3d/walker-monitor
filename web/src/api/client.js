@@ -61,6 +61,12 @@ export const api = {
     getNetwork: (hostname) =>
         fetchJSON(`${API_BASE}/hosts/${hostname}/network`),
 
+    getMemory: (hostname) =>
+        fetchJSON(`${API_BASE}/hosts/${hostname}/memory`),
+
+    getAnomalies: (hostname) =>
+        fetchJSON(`${API_BASE}/hosts/${hostname}/anomalies`),
+
     refresh: (hostname) =>
         fetchJSON(`${API_BASE}/hosts/${hostname}/refresh`),
 

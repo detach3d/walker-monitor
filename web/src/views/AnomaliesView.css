@@ -1,0 +1,496 @@
+/* AnomaliesView - Forensic Threat Detection Style */
+
+.anomalies-view {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* View Header */
+.anomalies-view .view-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.anomalies-view .view-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.anomalies-view .view-title::before {
+    content: '\26A0\FE0F';
+    font-size: 1.125rem;
+}
+
+.anomalies-view .timestamp {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    font-family: var(--font-mono);
+}
+
+/* Summary Cards */
+.anomalies-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.anomalies-summary .summary-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: border-color var(--transition-fast);
+}
+
+.anomalies-summary .summary-card.severity-critical {
+    border-color: rgba(239, 68, 68, 0.5);
+    background: rgba(239, 68, 68, 0.06);
+}
+
+.anomalies-summary .summary-card.severity-high {
+    border-color: rgba(245, 158, 11, 0.5);
+    background: rgba(245, 158, 11, 0.06);
+}
+
+.anomalies-summary .summary-card.severity-ok {
+    border-color: rgba(34, 197, 94, 0.3);
+}
+
+.anomalies-summary .summary-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary);
+}
+
+.anomalies-summary .summary-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+}
+
+.anomalies-summary .summary-hint {
+    font-size: 0.6875rem;
+    color: var(--text-tertiary);
+}
+
+/* All Clear State */
+.all-clear {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 40px;
+    text-align: center;
+}
+
+.all-clear-icon {
+    font-size: 2.5rem;
+    color: #4ade80;
+    margin-bottom: 16px;
+}
+
+.all-clear-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+.all-clear-description {
+    font-size: 0.875rem;
+    color: var(--text-tertiary);
+}
+
+/* Section Titles */
+.section-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.section-title svg {
+    color: #f87171;
+}
+
+/* Anomaly Cards */
+.anomalies-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.anomaly-card {
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    background: var(--bg-card);
+    overflow: hidden;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.anomaly-card:hover {
+    border-color: var(--border-primary);
+}
+
+.anomaly-card.expanded {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px var(--accent-primary-glow);
+}
+
+.anomaly-card.clean {
+    opacity: 0.8;
+}
+
+.anomaly-card.clean:hover {
+    opacity: 1;
+}
+
+.anomaly-summary {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    cursor: pointer;
+    border: none;
+    color: inherit;
+    text-align: left;
+}
+
+.anomaly-main {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex: 1;
+    flex-wrap: wrap;
+}
+
+.anomalies-view .process-pid {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    color: var(--accent-primary-light);
+    background: var(--bg-secondary);
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+}
+
+.anomalies-view .process-comm {
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.875rem;
+}
+
+.anomaly-chevron {
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+}
+
+/* Flag Badges */
+.flag-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.flag-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.flag-badge.small {
+    padding: 2px 8px;
+    font-size: 0.625rem;
+}
+
+.flag-badge.severity-critical {
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.18);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.flag-badge.severity-high {
+    color: #fbbf24;
+    background: rgba(245, 158, 11, 0.18);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.flag-badge.severity-medium {
+    color: var(--accent-primary-light);
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.flag-badge.severity-info {
+    color: var(--text-tertiary);
+    background: rgba(107, 114, 128, 0.15);
+    border: 1px solid rgba(107, 114, 128, 0.3);
+}
+
+/* Anomaly Details (expanded) */
+.anomaly-details {
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    padding: 0;
+}
+
+.thread-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+}
+
+.thread-table th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.thread-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    vertical-align: middle;
+}
+
+.thread-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.thread-table tbody tr:hover {
+    background: rgba(59, 130, 246, 0.04);
+}
+
+.tid-cell {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--text-primary);
+    width: 80px;
+}
+
+.exe-path-cell {
+    max-width: 0;
+    width: 50%;
+}
+
+.exe-path {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.exe-path.flagged {
+    color: #fca5a5;
+}
+
+.no-exe {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    font-style: italic;
+}
+
+/* Namespace Info */
+.namespace-info {
+    border-top: 1px solid var(--border-color);
+    padding: 12px 16px;
+}
+
+.namespace-title {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+.namespace-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+.namespace-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+}
+
+.ns-name {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+}
+
+.ns-value {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* Privilege Escalation Info */
+.privesc-info {
+    border-top: 1px solid rgba(239, 68, 68, 0.3);
+    padding: 12px 16px;
+    background: rgba(239, 68, 68, 0.04);
+}
+
+.privesc-title {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #f87171;
+    margin-bottom: 10px;
+}
+
+.privesc-grid {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.privesc-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    flex: 1;
+}
+
+.privesc-item.current {
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.privesc-label {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+}
+
+.privesc-detail {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+}
+
+.privesc-arrow {
+    font-size: 1.25rem;
+    color: #f87171;
+    flex-shrink: 0;
+}
+
+.privesc-ns-check {
+    margin-top: 10px;
+    font-size: 0.8125rem;
+    font-family: var(--font-mono);
+    color: var(--text-secondary);
+    padding: 6px 10px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+}
+
+.privesc-ns-check.foreign-ns {
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Clean Toggle */
+.clean-toggle {
+    padding-top: 4px;
+}
+
+.toggle-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 8px 16px;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.toggle-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.clean-section {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .anomalies-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .anomalies-view .view-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .anomalies-summary {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .thread-table th:nth-child(4),
+    .thread-table td:nth-child(4) {
+        display: none;
+    }
+}
