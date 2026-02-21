@@ -5,6 +5,7 @@ This is a fast runbook. For full dependency installation, use `README.md`.
 ## 0) Prerequisites (already installed)
 
 Make sure you already installed all dependencies from `README.md`:
+- Linux kernel `6.x+` (modern kernel API support required)
 - kernel headers/build tools
 - Python + venv/pip
 - Node.js 20+

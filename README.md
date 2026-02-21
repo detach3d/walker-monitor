@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/kernel-4.x%2B-1d4ed8?style=for-the-badge&logo=linux&logoColor=white" alt="Kernel 4.x+" />
+  <img src="https://img.shields.io/badge/kernel-6.x%2B-1d4ed8?style=for-the-badge&logo=linux&logoColor=white" alt="Kernel 6.x+" />
   <img src="https://img.shields.io/badge/python-3.8%2B-2563eb?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.8+" />
   <img src="https://img.shields.io/badge/node-20%2B-0891b2?style=for-the-badge&logo=node.js&logoColor=white" alt="Node 20+" />
 </p>
@@ -44,7 +44,7 @@ Browser UI
 
 ## Supported Environment
 
-- Linux (kernel 4.x+; tested on modern Ubuntu/Debian)
+- Linux (kernel 6.x+; requires modern headers/API support, tested on Ubuntu/Debian)
 - Root/sudo access (required for module load/unload)
 - Node.js 20+
 - Python 3.8+
