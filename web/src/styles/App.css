@@ -4,37 +4,43 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-    /* ===== Color Palette - Enterprise Dark Theme ===== */
+    /* ===== Color Palette - Logo Aligned Violet Theme ===== */
 
-    /* Base backgrounds - Deep blue-gray tones */
-    --bg-primary: #0B0F19;
-    --bg-secondary: #111827;
-    --bg-tertiary: #1F2937;
-    --bg-elevated: #374151;
-    --bg-card: #151C2C;
-    --bg-card-hover: #1C2436;
+    /* Base backgrounds - neutral violet surfaces */
+    --bg-primary: #0D0D12;
+    --bg-secondary: #141421;
+    --bg-tertiary: #1C1C2B;
+    --bg-elevated: #2A2A3C;
+    --bg-card: #161624;
+    --bg-card-hover: #1E1E30;
+    --bg-primary-rgb: 13, 13, 18;
+    --bg-secondary-rgb: 20, 20, 33;
+    --bg-tertiary-rgb: 28, 28, 43;
+    --bg-elevated-rgb: 42, 42, 60;
 
-    /* Primary accent - Electric Blue */
-    --accent-primary: #3B82F6;
-    --accent-primary-hover: #2563EB;
-    --accent-primary-light: #60A5FA;
-    --accent-primary-dark: #1D4ED8;
-    --accent-primary-glow: rgba(59, 130, 246, 0.35);
+    /* Primary accent - logo violet */
+    --accent-primary: #7C3AED;
+    --accent-primary-hover: #6D28D9;
+    --accent-primary-light: #A78BFA;
+    --accent-primary-dark: #5B21B6;
+    --accent-primary-rgb: 124, 58, 237;
+    --accent-primary-glow: rgba(124, 58, 237, 0.28);
 
-    /* Secondary accent - Indigo/Purple */
-    --accent-secondary: #6366F1;
-    --accent-secondary-hover: #4F46E5;
-    --accent-secondary-light: #818CF8;
+    /* Secondary accent - soft lavender */
+    --accent-secondary: #A78BFA;
+    --accent-secondary-hover: #8B5CF6;
+    --accent-secondary-light: #C4B5FD;
+    --accent-secondary-rgb: 167, 139, 250;
 
-    /* Tertiary accent - Cyan */
-    --accent-tertiary: #06B6D4;
-    --accent-tertiary-light: #22D3EE;
+    /* Tertiary accent - cool lilac */
+    --accent-tertiary: #8B5CF6;
+    --accent-tertiary-light: #DDD6FE;
 
     /* Text colors */
-    --text-primary: #F9FAFB;
-    --text-secondary: #9CA3AF;
-    --text-tertiary: #6B7280;
-    --text-muted: #4B5563;
+    --text-primary: #F5F3FF;
+    --text-secondary: #BBB7CD;
+    --text-tertiary: #8B86A3;
+    --text-muted: #6C6782;
 
     /* Status colors */
     --status-success: #10B981;
@@ -43,13 +49,14 @@
     --status-warning-bg: rgba(245, 158, 11, 0.15);
     --status-error: #EF4444;
     --status-error-bg: rgba(239, 68, 68, 0.15);
-    --status-info: #3B82F6;
-    --status-info-bg: rgba(59, 130, 246, 0.15);
+    --status-info: #A78BFA;
+    --status-info-rgb: 167, 139, 250;
+    --status-info-bg: rgba(167, 139, 250, 0.16);
 
     /* Borders */
-    --border-color: #1F2937;
-    --border-primary: #374151;
-    --border-secondary: #4B5563;
+    --border-color: #2A273C;
+    --border-primary: #3A3651;
+    --border-secondary: #4D486A;
     --border-focus: var(--accent-primary);
     --border-glow: var(--accent-primary-glow);
 
@@ -357,7 +364,7 @@ tbody tr:last-child td {
 .badge-primary {
     background: var(--status-info-bg);
     color: var(--accent-primary-light);
-    border: 1px solid rgba(59, 130, 246, 0.3);
+    border: 1px solid rgba(var(--status-info-rgb), 0.34);
 }
 
 .badge-secondary {
@@ -477,7 +484,7 @@ tbody tr:last-child td {
 /* ===== Error States ===== */
 .error-state {
     background: var(--status-error-bg);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    border: 1px solid rgba(239, 68, 68, 0.35);
     border-radius: var(--radius-md);
     padding: 14px 16px;
     color: var(--status-error);

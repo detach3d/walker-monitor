@@ -8,7 +8,6 @@
   <img src="https://img.shields.io/badge/kernel-4.x%2B-1d4ed8?style=for-the-badge&logo=linux&logoColor=white" alt="Kernel 4.x+" />
   <img src="https://img.shields.io/badge/python-3.8%2B-2563eb?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.8+" />
   <img src="https://img.shields.io/badge/node-20%2B-0891b2?style=for-the-badge&logo=node.js&logoColor=white" alt="Node 20+" />
-  <img src="https://img.shields.io/badge/security-hardened-0f766e?style=for-the-badge" alt="Security hardened" />
 </p>
 
 <p align="center">

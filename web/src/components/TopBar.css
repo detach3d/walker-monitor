@@ -6,7 +6,7 @@
     left: var(--sidebar-width);
     right: 0;
     height: var(--topbar-height);
-    background: rgba(17, 24, 39, 0.85);
+    background: rgba(var(--bg-secondary-rgb), 0.85);
     backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--border-color);
     display: flex;

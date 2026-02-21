@@ -25,11 +25,6 @@
     gap: 10px;
 }
 
-.memory-view .view-title::before {
-    content: '🧠';
-    font-size: 1.125rem;
-}
-
 .memory-view .timestamp {
     font-size: 0.75rem;
     color: var(--text-tertiary);
@@ -106,7 +101,7 @@
 
 .memory-view th[style*="cursor: pointer"]:hover {
     color: var(--accent-primary-light);
-    background: rgba(59, 130, 246, 0.08);
+    background: rgba(var(--accent-primary-rgb), 0.08);
 }
 
 .memory-view th svg {
@@ -120,7 +115,7 @@
 }
 
 .memory-view tbody tr:hover {
-    background: rgba(59, 130, 246, 0.05);
+    background: rgba(var(--accent-primary-rgb), 0.05);
 }
 
 .memory-view td {
@@ -171,9 +166,9 @@
 }
 
 .state-sleeping {
-    background: rgba(59, 130, 246, 0.15);
+    background: rgba(var(--accent-primary-rgb), 0.15);
     color: var(--accent-primary-light);
-    border: 1px solid rgba(59, 130, 246, 0.3);
+    border: 1px solid rgba(var(--accent-primary-rgb), 0.3);
 }
 
 .state-disk {

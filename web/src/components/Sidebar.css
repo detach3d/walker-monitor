@@ -90,9 +90,9 @@
 }
 
 .nav-item:hover {
-    background: rgba(59, 130, 246, 0.08);
+    background: rgba(var(--accent-primary-rgb), 0.08);
     color: var(--text-primary);
-    border-color: rgba(59, 130, 246, 0.15);
+    border-color: rgba(var(--accent-primary-rgb), 0.15);
 }
 
 .nav-item:hover .nav-icon {
@@ -100,9 +100,9 @@
 }
 
 .nav-item.active {
-    background: rgba(59, 130, 246, 0.12);
+    background: rgba(var(--accent-primary-rgb), 0.12);
     color: var(--accent-primary-light);
-    border-color: rgba(59, 130, 246, 0.25);
+    border-color: rgba(var(--accent-primary-rgb), 0.25);
 }
 
 .nav-item.active::before {

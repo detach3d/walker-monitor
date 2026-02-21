@@ -25,11 +25,6 @@
     gap: 10px;
 }
 
-.anomalies-view .view-title::before {
-    content: '\26A0\FE0F';
-    font-size: 1.125rem;
-}
-
 .anomalies-view .timestamp {
     font-size: 0.75rem;
     color: var(--text-tertiary);
@@ -245,8 +240,8 @@
 
 .flag-badge.severity-medium {
     color: var(--accent-primary-light);
-    background: rgba(59, 130, 246, 0.15);
-    border: 1px solid rgba(59, 130, 246, 0.3);
+    background: rgba(var(--accent-primary-rgb), 0.15);
+    border: 1px solid rgba(var(--accent-primary-rgb), 0.3);
 }
 
 .flag-badge.severity-info {
@@ -292,7 +287,7 @@
 }
 
 .thread-table tbody tr:hover {
-    background: rgba(59, 130, 246, 0.04);
+    background: rgba(var(--accent-primary-rgb), 0.04);
 }
 
 .tid-cell {
@@ -528,7 +523,7 @@
 }
 
 .vma-stat-exec {
-    color: #60a5fa;
+    color: var(--accent-primary-light);
 }
 
 .vma-stat-wx {

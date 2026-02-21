@@ -212,8 +212,8 @@
 
 .socket-state.established {
     color: var(--accent-primary-light);
-    border-color: rgba(59, 130, 246, 0.4);
-    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(var(--accent-primary-rgb), 0.4);
+    background: rgba(var(--accent-primary-rgb), 0.12);
 }
 
 .socket-state.listening {

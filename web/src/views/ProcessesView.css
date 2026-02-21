@@ -40,8 +40,8 @@
 }
 
 .process-item:has(.thread-detail) {
-    border-color: rgba(59, 130, 246, 0.35);
-    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.16);
+    border-color: rgba(var(--accent-primary-rgb), 0.35);
+    box-shadow: 0 0 0 1px rgba(var(--accent-primary-rgb), 0.16);
 }
 
 .process-row {
@@ -51,12 +51,12 @@
     align-items: center;
     gap: 12px;
     padding: 10px 14px;
-    background: linear-gradient(135deg, var(--bg-tertiary), rgba(31, 41, 55, 0.8));
+    background: linear-gradient(135deg, var(--bg-tertiary), rgba(var(--bg-secondary-rgb), 0.82));
     cursor: pointer;
 }
 
 .process-row:hover {
-    background: linear-gradient(135deg, rgba(55, 65, 81, 0.95), rgba(31, 41, 55, 0.9));
+    background: linear-gradient(135deg, rgba(var(--bg-elevated-rgb), 0.95), rgba(var(--bg-tertiary-rgb), 0.9));
 }
 
 .expand-btn {
@@ -74,8 +74,8 @@
 
 .expand-btn:hover {
     color: var(--text-primary);
-    background: rgba(59, 130, 246, 0.08);
-    border-color: rgba(59, 130, 246, 0.25);
+    background: rgba(var(--accent-primary-rgb), 0.08);
+    border-color: rgba(var(--accent-primary-rgb), 0.25);
 }
 
 .processes-view .process-pid {
@@ -107,7 +107,7 @@
 
 .thread-detail {
     border-top: 1px solid var(--border-color);
-    background: rgba(17, 24, 39, 0.82);
+    background: rgba(var(--bg-secondary-rgb), 0.82);
     padding: 12px 14px 14px;
 }
 
@@ -214,8 +214,8 @@
 .details-inline-note {
     font-size: 0.75rem;
     color: var(--accent-primary-light);
-    background: rgba(59, 130, 246, 0.1);
-    border: 1px solid rgba(59, 130, 246, 0.25);
+    background: rgba(var(--accent-primary-rgb), 0.1);
+    border: 1px solid rgba(var(--accent-primary-rgb), 0.25);
     border-radius: var(--radius-md);
     padding: 8px 10px;
 }

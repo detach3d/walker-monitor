@@ -197,7 +197,7 @@ const buildFlowGraph = (processes, direction, edgeType) => {
             type: edgeType,
             animated: false,
             style: {
-                stroke: '#4B5563',
+                stroke: 'var(--border-secondary)',
                 strokeWidth: 1.5,
             },
         };
@@ -249,7 +249,7 @@ const ProcessTreeFlow = ({
                 defaultEdgeOptions={{ type: edgeType }}
                 proOptions={{ hideAttribution: true }}
             >
-                <Background color="#1F2937" gap={20} size={1} />
+                <Background color="var(--border-color)" gap={20} size={1} />
                 <Controls showInteractive={false} />
             </ReactFlow>
         </div>
