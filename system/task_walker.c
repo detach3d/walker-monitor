@@ -67,6 +67,10 @@ static ssize_t anomalies_walker_write(struct file *file,
 									  size_t length,
 									  loff_t *offset);
 
+void get_vma_info(struct task_struct *task,
+				  char *buf,
+				  int buflen);
+
 void get_exe_path(struct task_struct *task,
 				  char *buf,
 				  int buflen);
@@ -519,44 +523,59 @@ static ssize_t memory_walker_write(struct file *file,
 
 		mm = get_task_mm(task); // pin memory to prevent it from being freed while we access it
 
-		if (!mm)
+		if (mm)
 		{
-			put_task_struct(task); // unpin task
-			goto no_memory;
-		}
+			// Resident memory
+			rss_pages = get_mm_rss(mm);
+			rss_bytes = rss_pages * PAGE_SIZE;
 
-		// Resident memory
-		rss_pages = get_mm_rss(mm);
-		rss_bytes = rss_pages * PAGE_SIZE;
+			// Shared memory
+			file_pages = get_mm_counter(mm, MM_FILEPAGES);
+			shm_pages = get_mm_counter(mm, MM_SHMEMPAGES);
 
-		// Shared memory
-		file_pages = get_mm_counter(mm, MM_FILEPAGES);
-		shm_pages = get_mm_counter(mm, MM_SHMEMPAGES);
+			shr_pages = file_pages + shm_pages;
+			shr_bytes = shr_pages * PAGE_SIZE;
 
-		shr_pages = file_pages + shm_pages;
-		shr_bytes = shr_pages * PAGE_SIZE;
+			// Virt Memory
+			virt_kb = mm->total_vm * PAGE_SIZE;
 
-		// Virt Memory
-		virt_kb = mm->total_vm * PAGE_SIZE;
+			mmput(mm);
 
-		mmput(mm);
-
-		int bytes = snprintf(message_buf_for_memory + offset_buf, remaining,
-							 "PID: %d | COMM: %s\n\
+			int bytes = snprintf(message_buf_for_memory + offset_buf, remaining,
+								 "PID: %d | COMM: %s\n\
 STATE: %c | VIRTUAL MEM: %lu KB | RESIDENT MEM: %lu KB | SHARED MEM: %lu KB\n",
-							 task->pid, task->comm,
-							 state, virt_kb >> 10, rss_bytes >> 10, shr_bytes >> 10);
+								 task->pid, task->comm,
+								 state, virt_kb >> 10, rss_bytes >> 10, shr_bytes >> 10);
 
-		if (bytes <= 0 || bytes >= remaining)
-		{
+			if (bytes <= 0 || bytes >= remaining)
+			{
+				put_task_struct(task); // unpin task
+				break;
+			}
+			offset_buf += bytes;
+			remaining -= bytes;
+
 			put_task_struct(task); // unpin task
-			break;
 		}
-		offset_buf += bytes;
-		remaining -= bytes;
+		else
+		{
 
-		put_task_struct(task); // unpin task
-	no_memory:
+			int bytes = snprintf(message_buf_for_memory + offset_buf, remaining,
+								 "PID: %d | COMM: %s\n\
+STATE: %c\n",
+								 task->pid, task->comm,
+								 state);
+
+			if (bytes <= 0 || bytes >= remaining)
+			{
+				put_task_struct(task); // unpin task
+				break;
+			}
+			offset_buf += bytes;
+			remaining -= bytes;
+
+			put_task_struct(task);
+		}
 	}
 	rcu_read_unlock();
 
@@ -574,19 +593,20 @@ static ssize_t anomalies_walker_write(struct file *file,
 	struct task_struct *thread;
 	int offset_buf = 0;
 	int remaining = sizeof(message_buf_for_anomalies) - 1;
-	const struct cred *init_cred;
+	const struct cred *init_cred = NULL;
 
 	printk(KERN_INFO "Walking through the anomalies...\n");
 
 	rcu_read_lock();
 	for_each_process(proc)
 	{
-		if(proc->pid == 1) {
+		if (proc->pid == 1)
+		{
 			init_cred = __task_cred(proc);
 		}
 
 		int bytes = snprintf(message_buf_for_anomalies + offset_buf, remaining,
-							 "PID: %d | Comm: %s\n",
+							 "\n******************	   PID: %d | Comm: %s	   ******************\n",
 							 proc->pid, proc->comm);
 
 		if (bytes <= 0 || bytes >= remaining)
@@ -607,7 +627,7 @@ static ssize_t anomalies_walker_write(struct file *file,
 
 			bytes = snprintf(message_buf_for_anomalies + offset_buf, remaining,
 							 "	Thread info: %d | Comm: %s\n\
-		%s\n", /*exe path*/
+	%s\n", /*exe path*/
 							 thread->pid, thread->comm,
 							 message_buf_for_exe_path);
 
@@ -627,7 +647,7 @@ static ssize_t anomalies_walker_write(struct file *file,
 			{
 
 				bytes = scnprintf(message_buf_for_anomalies + offset_buf, remaining,
-                  "	Namespace info:\n\
+								  "	Namespace info:\n\
 	mnt:[%u]\n\
 	pid:[%u]\n\
 	net:[%u]\n\
@@ -636,14 +656,14 @@ static ssize_t anomalies_walker_write(struct file *file,
 	user:[%u]\n\
 	cgroup:[%u]\n\
 	depth: [%u]\n",
-                  ((struct ns_common *)ns->mnt_ns)->inum,
-                  ns->pid_ns_for_children->ns.inum,
-                  ns->net_ns->ns.inum,
-                  ns->uts_ns->ns.inum,
-                  ns->ipc_ns->ns.inum,
-                  __task_cred(proc)->user_ns->ns.inum,
-                  ns->cgroup_ns->ns.inum,
-				  ns->pid_ns_for_children->level);
+								  ((struct ns_common *)ns->mnt_ns)->inum,
+								  ns->pid_ns_for_children->ns.inum,
+								  ns->net_ns->ns.inum,
+								  ns->uts_ns->ns.inum,
+								  ns->ipc_ns->ns.inum,
+								  __task_cred(proc)->user_ns->ns.inum,
+								  ns->cgroup_ns->ns.inum,
+								  ns->pid_ns_for_children->level);
 
 				if (bytes <= 0 || bytes >= remaining)
 					break;
@@ -653,9 +673,9 @@ static ssize_t anomalies_walker_write(struct file *file,
 				// printk(KERN_INFO "%s\n", buf);
 			}
 		}
-	
+
 		// --------------------------------------------
-		// Privilege escalation detection. A process running as root that was spawned 
+		// Privilege escalation detection. A process running as root that was spawned
 		// by a non-root parent is suspicious.
 		{
 			const struct task_struct *parent_proc = rcu_dereference(proc->real_parent);
@@ -665,17 +685,17 @@ static ssize_t anomalies_walker_write(struct file *file,
 
 			if (current_cred->euid.val == 0 && parent_cred->euid.val != 0)
 			{
-				char * root_info = current_cred->user_ns == init_cred->user_ns ? "yes" : "no"; 
-				
+				char *root_info = current_cred->user_ns == init_cred->user_ns ? "yes" : "no";
+
 				bytes = scnprintf(message_buf_for_anomalies + offset_buf, remaining,
-								 "\n	Privesc info:\n\
+								  "\n	Privesc info:\n\
 	Possible privilege escalation detected!\n\
 	Is current process in the same user namespace as init? %s\n\
 	Parent PID: %d | Parent Comm: %s | Parent UID: %d\n\
 	Current PID: %d | Current Comm: %s | Current UID: %d\n",
-								 root_info,
-								 parent_proc->pid, parent_proc->comm, parent_cred->euid.val,
-								 proc->pid, proc->comm, current_cred->euid.val);
+								  root_info,
+								  parent_proc->pid, parent_proc->comm, parent_cred->euid.val,
+								  proc->pid, proc->comm, current_cred->euid.val);
 
 				if (bytes <= 0 || bytes >= remaining)
 					break;
@@ -684,13 +704,175 @@ static ssize_t anomalies_walker_write(struct file *file,
 				remaining -= bytes;
 			}
 		}
-	
+
+		// Start time information
+		{
+			u64 start_ns;
+			struct timespec64 ts;
+
+			// Start time since boot
+			start_ns = ktime_to_ns(proc->start_time);
+			bytes = scnprintf(message_buf_for_anomalies + offset_buf, remaining,
+							  "\n	Time info:\n\
+	start_time (ns since boot): %llu\n",
+							  start_ns);
+
+			if (bytes <= 0 || bytes >= remaining)
+				break;
+
+			offset_buf += bytes;
+			remaining -= bytes;
+
+			// “Wall-clock” start time computed via offset
+
+			u64 now_real_ns = ktime_get_real_ns();
+			u64 now_boot_ns = ktime_get_boottime_ns();
+			u64 real_ns = now_real_ns - now_boot_ns + start_ns;
+
+			ts = ns_to_timespec64((s64)real_ns);
+
+			bytes = scnprintf(message_buf_for_anomalies + offset_buf, remaining,
+							  "	computed start realtime: %lld.%09ld\n",
+							  (long long)ts.tv_sec, ts.tv_nsec);
+
+			if (bytes <= 0 || bytes >= remaining)
+				break;
+
+			offset_buf += bytes;
+			remaining -= bytes;
+		}
+
+		// Command line information. A process with an empty command line or a command line
+		// that doesn't match the exe path can be suspicious.
+		{
+			// char message_buf_for_full_cmd_path[512];
+
+			char *message_buf_for_full_cmd_path = kstrdup_quotable_cmdline(proc, GFP_KERNEL);
+
+			bytes = snprintf(message_buf_for_anomalies + offset_buf, remaining,
+							 "\n	Command Line: %s\n",
+							 message_buf_for_full_cmd_path);
+
+			if (bytes <= 0 || bytes >= remaining)
+				break;
+
+			offset_buf += bytes;
+			remaining -= bytes;
+		}
+
+		{
+			static char message_buf_for_vma_info[16384];
+
+			get_vma_info(proc, message_buf_for_vma_info, sizeof(message_buf_for_vma_info));
+
+			bytes = snprintf(message_buf_for_anomalies + offset_buf, remaining,
+							 "\n	VMA Info:\n %s\n",
+							 message_buf_for_vma_info);
+
+			if (bytes <= 0 || bytes >= remaining)
+				break;
+
+			offset_buf += bytes;
+			remaining -= bytes;
+		}
 	}
 	rcu_read_unlock();
 
 	message_buf_for_anomalies[offset_buf] = '\0';
 	Message_Ptr = message_buf_for_anomalies;
 	return offset_buf;
+}
+
+void get_vma_info(struct task_struct *task, char *buf, int buflen)
+{
+	struct mm_struct *mm = get_task_mm(task);
+	int offset_buf = 0;
+
+	if (!mm)
+	{
+		buf[offset_buf] = '\0';
+		return;
+	}
+
+	struct vm_area_struct *vma;
+	VMA_ITERATOR(vmi, mm, 0);
+
+	mmap_read_lock(mm);
+
+	// temp buffer for d_path, as it can modify the input buffer
+	char *temp_buf = (char *)kmalloc(16384, GFP_ATOMIC);
+	if (temp_buf == NULL)
+	{
+		pr_err("Failed to allocate memory for temp_buf\n");
+		mmap_read_unlock(mm);
+		mmput(mm);
+		buf[offset_buf] = '\0';
+		return;
+	}
+
+	for_each_vma(vmi, vma)
+	{
+		unsigned long flags = vma->vm_flags;
+
+		if (vma->vm_file)
+		{
+			char *path = d_path(&vma->vm_file->f_path, temp_buf, 16384);
+			if (!IS_ERR(path))
+			{
+				int bytes = scnprintf(buf + offset_buf, buflen,
+									  "	VMA %lx-%lx flags=0x%lx %c%c%c %s file=%s\n",
+									  vma->vm_start, vma->vm_end, flags,
+									  (flags & VM_READ) ? 'r' : '-',
+									  (flags & VM_WRITE) ? 'w' : '-',
+									  (flags & VM_EXEC) ? 'x' : '-',
+									  (flags & VM_SHARED) ? "shared" : "private",
+									  path);
+
+				// pr_info("VMA %lx-%lx flags=%lx\n", vma->vm_start, vma->vm_end, vma->vm_flags);
+
+				if (bytes >= buflen)
+				{
+					buf[offset_buf] = '\0';
+					mmap_read_unlock(mm);
+					mmput(mm);
+					kfree(temp_buf);
+					return;
+				}
+
+				offset_buf += bytes;
+				buflen -= bytes;
+			}
+		}
+		else
+		{
+			int bytes = scnprintf(buf + offset_buf, buflen,
+								  "	VMA %lx-%lx flags=0x%lx %c%c%c %s\n",
+								  vma->vm_start, vma->vm_end, flags,
+								  (flags & VM_READ) ? 'r' : '-',
+								  (flags & VM_WRITE) ? 'w' : '-',
+								  (flags & VM_EXEC) ? 'x' : '-',
+								  (flags & VM_SHARED) ? "shared" : "private");
+
+			// pr_info("VMA %lx-%lx flags=%lx\n", vma->vm_start, vma->vm_end, vma->vm_flags);
+
+			if (bytes >= buflen)
+			{
+				buf[offset_buf] = '\0';
+				mmap_read_unlock(mm);
+				mmput(mm);
+				kfree(temp_buf);
+				return;
+			}
+
+			offset_buf += bytes;
+			buflen -= bytes;
+		}
+	}
+
+	mmap_read_unlock(mm);
+	mmput(mm);
+	kfree(temp_buf);
+	buf[offset_buf] = '\0';
 }
 
 void get_exe_path(struct task_struct *task, char *buf, int buflen)
@@ -737,7 +919,7 @@ void get_exe_path(struct task_struct *task, char *buf, int buflen)
 		if (!IS_ERR(path))
 		{
 			int bytes = snprintf(buf + offset_buf, buflen,
-								 "Executable path: %s\n", path);
+								 "\n	Executable path: %s\n", path);
 
 			// pr_info("Executable path for PID %d: %s\n", task->pid, path);
 

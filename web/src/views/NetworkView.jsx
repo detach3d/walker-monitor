@@ -163,7 +163,6 @@ const NetworkView = ({ networkData, searchQuery }) => {
                 ) : (
                     filteredConnections.map((conn) => {
                         const isExpanded = expandedConnections.has(conn.id);
-                        const isListening = conn.state === 'listening' || conn.remotePort === 0;
                         const ownerCount = conn.owners.length;
                         const leadOwner = conn.owners[0];
 

@@ -64,6 +64,7 @@ const MemoryView = ({ memoryData, searchQuery }) => {
             case 'D': return 'state-disk';
             case 'T': return 'state-stopped';
             case 'Z': return 'state-zombie';
+            case 'I': return 'state-idle';
             default: return 'state-other';
         }
     };

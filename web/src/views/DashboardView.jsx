@@ -1,10 +1,12 @@
 import React from 'react';
 import {
     FiActivity,
+    FiAlertTriangle,
     FiCpu,
     FiDatabase,
     FiHardDrive,
     FiServer,
+    FiShield,
     FiRefreshCw
 } from 'react-icons/fi';
 import './DashboardView.css';
@@ -13,11 +15,20 @@ const formatNumber = (value = 0) => Number(value || 0).toLocaleString('en-US');
 
 const formatTime = (ns = 0) => {
     const ms = ns / 1000;
-    if (ms < 1000) return `${ms.toFixed(0)} μs`;
+    if (ms < 1000) return `${ms.toFixed(0)} us`;
     const sec = ms / 1000;
     if (sec < 60) return `${sec.toFixed(2)} s`;
     const min = sec / 60;
     return `${min.toFixed(2)} min`;
+};
+
+const formatKB = (kb) => {
+    if (!kb) return '0 KB';
+    if (kb < 1024) return `${kb} KB`;
+    const mb = kb / 1024;
+    if (mb < 1024) return `${mb.toFixed(1)} MB`;
+    const gb = mb / 1024;
+    return `${gb.toFixed(2)} GB`;
 };
 
 const EmptyState = ({ onRefresh }) => (
@@ -33,12 +44,27 @@ const EmptyState = ({ onRefresh }) => (
     </div>
 );
 
+const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+
+const FLAG_META = {
+    deleted: { label: 'Deleted Binary', severity: 'critical' },
+    kthread_imposter: { label: 'Kthread Imposter', severity: 'critical' },
+    privesc: { label: 'Privilege Escalation', severity: 'critical' },
+    suspicious_vma: { label: 'Suspicious VMA', severity: 'critical' },
+    suspicious_path: { label: 'Suspicious Path', severity: 'high' },
+    non_default_ns: { label: 'Non-default NS', severity: 'medium' },
+    recently_started: { label: 'Recently Started', severity: 'low' },
+    kernel_thread: { label: 'Kernel Thread', severity: 'info' },
+};
+
 const DashboardView = ({
     hosts = [],
     snapshotData,
     psData,
     fdtData,
     cpuData,
+    memoryData,
+    anomaliesData,
     selectedHost,
     loading,
     onRefresh
@@ -48,6 +74,8 @@ const DashboardView = ({
     const psProcesses = psData?.processes || [];
     const fdtProcesses = fdtData?.processes || [];
     const cpuProcesses = cpuData?.processes || [];
+    const memProcesses = memoryData?.processes || [];
+    const anomProcesses = anomaliesData?.processes || [];
 
     const uniquePIDs = new Set([
         ...snapshotProcesses.map((p) => p.pid),
@@ -64,16 +92,36 @@ const DashboardView = ({
         0
     );
 
-    const processDelta = snapshotProcesses.length - psProcesses.length;
-    const deltaLabel =
-        processDelta === 0
-            ? 'Parity'
-            : processDelta > 0
-                ? `${processDelta} only in snapshot`
-                : `${Math.abs(processDelta)} only in ps`;
-    const processTotal = snapshotProcesses.length + psProcesses.length;
-    const snapshotPct = processTotal ? (snapshotProcesses.length / processTotal) * 100 : 50;
-    const psPct = 100 - snapshotPct;
+    // Anomalies breakdown - only count real anomalies (not info/low flags like kernel_thread, recently_started)
+    const ALERT_SEVERITIES = new Set(['critical', 'high', 'medium']);
+    const flaggedProcesses = anomProcesses.filter(p =>
+        p.flags && p.flags.some(f => ALERT_SEVERITIES.has(FLAG_META[f]?.severity))
+    );
+    const cleanProcesses = anomProcesses.length - flaggedProcesses.length;
+    const criticalCount = anomProcesses.filter(p =>
+        p.flags?.some(f => FLAG_META[f]?.severity === 'critical')
+    ).length;
+    const highCount = anomProcesses.filter(p =>
+        p.flags?.some(f => FLAG_META[f]?.severity === 'high') &&
+        !p.flags?.some(f => FLAG_META[f]?.severity === 'critical')
+    ).length;
+
+    // Flag frequency
+    const flagCounts = {};
+    flaggedProcesses.forEach(p => {
+        (p.flags || []).forEach(f => {
+            flagCounts[f] = (flagCounts[f] || 0) + 1;
+        });
+    });
+    const flagEntries = Object.entries(flagCounts)
+        .sort(([a], [b]) => (SEVERITY_ORDER[FLAG_META[a]?.severity] ?? 9) - (SEVERITY_ORDER[FLAG_META[b]?.severity] ?? 9));
+
+    // Memory top consumers
+    const topMem = [...memProcesses]
+        .sort((a, b) => (b.resident_kb || 0) - (a.resident_kb || 0))
+        .slice(0, 6);
+    const memMax = Math.max(...topMem.map(p => p.resident_kb || 0), 1);
+    const totalResident = memProcesses.reduce((s, p) => s + (p.resident_kb || 0), 0);
 
     const coreDistribution = cpuProcesses.reduce((acc, proc) => {
         const core = proc.cpu ?? 'N/A';
@@ -108,7 +156,9 @@ const DashboardView = ({
         snapshotProcesses.length ||
         psProcesses.length ||
         fdtProcesses.length ||
-        cpuProcesses.length;
+        cpuProcesses.length ||
+        memProcesses.length ||
+        anomProcesses.length;
 
     if (!selectedHost) {
         return (
@@ -134,8 +184,8 @@ const DashboardView = ({
                     <div>
                         <h2>Operations Pulse</h2>
                         <p className="lede">
-                            Snapshot, ps, file handles, and CPU views merged into a single,
-                            high-signal console.
+                            Process forensics, anomaly detection, memory, CPU, and file handles
+                            merged into a single high-signal console.
                         </p>
                         <div className="meta-row">
                             <span className={`pill status-${hostMeta.status || 'offline'}`}>
@@ -144,6 +194,11 @@ const DashboardView = ({
                             <span className="pill">
                                 {formatNumber(uniquePIDs.size)} processes observed
                             </span>
+                            {criticalCount > 0 && (
+                                <span className="pill pill-critical">
+                                    <FiAlertTriangle /> {criticalCount} critical
+                                </span>
+                            )}
                             {lastUpdated && (
                                 <span className="pill subtle">
                                     Last data · {new Date(lastUpdated).toLocaleString()}
@@ -156,41 +211,74 @@ const DashboardView = ({
                         onClick={onRefresh}
                         disabled={loading}
                     >
-                        <FiRefreshCw /> {loading ? 'Syncing…' : 'Sync data'}
+                        <FiRefreshCw /> {loading ? 'Syncing...' : 'Sync data'}
                     </button>
                 </div>
             </div>
 
+            {/* Security Summary - top priority */}
+            {anomProcesses.length > 0 && (
+                <div className="security-strip">
+                    <div className="security-card">
+                        <div className="security-icon critical">
+                            <FiAlertTriangle />
+                        </div>
+                        <div className="security-body">
+                            <span className="security-label">Critical</span>
+                            <span className="security-count">{criticalCount}</span>
+                        </div>
+                    </div>
+                    <div className="security-card">
+                        <div className="security-icon high">
+                            <FiShield />
+                        </div>
+                        <div className="security-body">
+                            <span className="security-label">High</span>
+                            <span className="security-count">{highCount}</span>
+                        </div>
+                    </div>
+                    <div className="security-card">
+                        <div className="security-icon flagged">
+                            <FiActivity />
+                        </div>
+                        <div className="security-body">
+                            <span className="security-label">Flagged</span>
+                            <span className="security-count">{flaggedProcesses.length}</span>
+                        </div>
+                    </div>
+                    <div className="security-card">
+                        <div className="security-icon clean">
+                            <FiShield />
+                        </div>
+                        <div className="security-body">
+                            <span className="security-label">Clean</span>
+                            <span className="security-count">{cleanProcesses}</span>
+                        </div>
+                    </div>
+                    <div className="security-card">
+                        <div className="security-icon total">
+                            <FiServer />
+                        </div>
+                        <div className="security-body">
+                            <span className="security-label">Scanned</span>
+                            <span className="security-count">{anomProcesses.length}</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Metric cards */}
             <div className="metric-grid">
                 <div className="metric-card primary">
                     <div className="metric-icon">
-                        <FiServer />
-                    </div>
-                    <div className="metric-body">
-                        <p className="metric-label">Hosts</p>
-                        <div className="metric-value">
-                            {formatNumber(hosts.length)}
-                            <span className="metric-sub">
-                                {formatNumber(
-                                    hosts.filter((h) => h.status === 'online').length
-                                )}{' '}
-                                online
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="metric-card">
-                    <div className="metric-icon accent">
                         <FiActivity />
                     </div>
                     <div className="metric-body">
-                        <p className="metric-label">Processes (unique)</p>
+                        <p className="metric-label">Processes</p>
                         <div className="metric-value">
                             {formatNumber(uniquePIDs.size)}
                             <span className="metric-sub">
-                                {formatNumber(snapshotProcesses.length)} snapshot ·{' '}
-                                {formatNumber(psProcesses.length)} ps
+                                {formatNumber(threadsTotal)} threads
                             </span>
                         </div>
                     </div>
@@ -198,13 +286,15 @@ const DashboardView = ({
 
                 <div className="metric-card">
                     <div className="metric-icon accent">
-                        <FiCpu />
+                        <FiDatabase />
                     </div>
                     <div className="metric-body">
-                        <p className="metric-label">Threads observed</p>
+                        <p className="metric-label">Total Resident Memory</p>
                         <div className="metric-value">
-                            {formatNumber(threadsTotal)}
-                            <span className="metric-sub">across tracked processes</span>
+                            {formatKB(totalResident)}
+                            <span className="metric-sub">
+                                {formatNumber(memProcesses.length)} processes
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -225,75 +315,114 @@ const DashboardView = ({
                 </div>
             </div>
 
+            {/* Anomalies + Memory panels - security first */}
             <div className="panel-grid">
-                <section className="panel">
+                <section className="panel list-panel">
                     <div className="panel-header">
                         <div>
-                            <p className="eyebrow">Process footprint</p>
-                            <h3>Snapshot vs ps</h3>
+                            <p className="eyebrow">Anomaly detection</p>
+                            <h3>Flag Breakdown</h3>
                         </div>
-                        <span className={`delta-badge ${processDelta === 0 ? 'neutral' : processDelta > 0 ? 'positive' : 'negative'}`}>
-                            {deltaLabel}
+                        <span className={`delta-badge ${criticalCount > 0 ? 'negative' : 'neutral'}`}>
+                            {flaggedProcesses.length} flagged
                         </span>
                     </div>
-                    <div className="bar-compare">
-                        <div
-                            className="bar-slice snapshot"
-                            style={{
-                                width: `${snapshotPct}%`
-                            }}
-                        >
-                            <span>{formatNumber(snapshotProcesses.length)} snapshot</span>
-                        </div>
-                        <div
-                            className="bar-slice ps"
-                            style={{
-                                width: `${psPct}%`
-                            }}
-                        >
-                            <span>{formatNumber(psProcesses.length)} ps</span>
-                        </div>
-                    </div>
-                    <div className="legend">
-                        <span className="legend-dot snapshot" /> Snapshot
-                        <span className="legend-dot ps" /> ps listing
-                    </div>
+                    {flagEntries.length === 0 ? (
+                        <div className="muted">No anomalies detected. All clear.</div>
+                    ) : (
+                        <ul className="entity-list">
+                            {flagEntries.map(([flag, count]) => {
+                                const meta = FLAG_META[flag] || { label: flag, severity: 'info' };
+                                return (
+                                    <li key={flag} className="entity-row">
+                                        <div className="entity-main">
+                                            <span className={`entity-pill severity-${meta.severity}`}>
+                                                {meta.label}
+                                            </span>
+                                        </div>
+                                        <div className="entity-meta">
+                                            <span className="entity-sub">{count} process{count !== 1 ? 'es' : ''}</span>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
                 </section>
 
-                <section className="panel">
+                <section className="panel list-panel">
                     <div className="panel-header">
                         <div>
-                            <p className="eyebrow">Scheduling surface</p>
-                            <h3>CPU core distribution</h3>
+                            <p className="eyebrow">Memory pressure</p>
+                            <h3>Top Memory Consumers</h3>
                         </div>
                     </div>
-                    <div className="core-grid">
-                        {coreEntries.length === 0 && (
-                            <div className="muted">No CPU data available.</div>
-                        )}
-                        {coreEntries.map(([core, count]) => {
-                            const pct = Math.round(
-                                (count / Math.max(...Object.values(coreDistribution))) * 100
-                            );
-                            return (
-                                <div key={core} className="core-card">
-                                    <div className="core-top">
-                                        <span className="core-label">Core {core}</span>
-                                        <span className="core-count">{count}</span>
-                                    </div>
-                                    <div className="progress">
-                                        <div
-                                            className="progress-value"
-                                            style={{ width: `${pct}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                    {topMem.length === 0 ? (
+                        <div className="muted">No memory data available.</div>
+                    ) : (
+                        <ul className="entity-list">
+                            {topMem.map((proc) => {
+                                const pct = Math.round(((proc.resident_kb || 0) / memMax) * 100);
+                                return (
+                                    <li key={proc.pid} className="entity-row">
+                                        <div className="entity-main">
+                                            <span className="entity-pill">PID {proc.pid}</span>
+                                            <span className="entity-name">{proc.comm}</span>
+                                        </div>
+                                        <div className="entity-meta">
+                                            <span className="entity-sub">
+                                                {formatKB(proc.resident_kb)}
+                                            </span>
+                                            <div className="progress skinny">
+                                                <div
+                                                    className="progress-value"
+                                                    style={{ width: `${pct}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    )}
                 </section>
             </div>
 
+            {/* CPU distribution */}
+            <section className="panel">
+                <div className="panel-header">
+                    <div>
+                        <p className="eyebrow">Scheduling surface</p>
+                        <h3>CPU core distribution</h3>
+                    </div>
+                </div>
+                <div className="core-grid">
+                    {coreEntries.length === 0 && (
+                        <div className="muted">No CPU data available.</div>
+                    )}
+                    {coreEntries.map(([core, count]) => {
+                        const pct = Math.round(
+                            (count / Math.max(...Object.values(coreDistribution))) * 100
+                        );
+                        return (
+                            <div key={core} className="core-card">
+                                <div className="core-top">
+                                    <span className="core-label">Core {core}</span>
+                                    <span className="core-count">{count}</span>
+                                </div>
+                                <div className="progress">
+                                    <div
+                                        className="progress-value"
+                                        style={{ width: `${pct}%` }}
+                                    />
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </section>
+
+            {/* CPU + FD panels */}
             <div className="panel-grid">
                 <section className="panel list-panel">
                     <div className="panel-header">

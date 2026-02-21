@@ -194,6 +194,12 @@
     border: 1px solid rgba(168, 85, 247, 0.3);
 }
 
+.state-idle {
+    background: rgba(107, 114, 128, 0.12);
+    color: #9ca3af;
+    border: 1px solid rgba(107, 114, 128, 0.25);
+}
+
 .state-other {
     background: rgba(107, 114, 128, 0.15);
     color: var(--text-tertiary);

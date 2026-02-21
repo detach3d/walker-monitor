@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">Walker Monitor Banner</title>
+  <desc id="desc">Hero banner with shield logo, telemetry lines, and product title.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#050c16"/>
+      <stop offset="50%" stop-color="#0b1627"/>
+      <stop offset="100%" stop-color="#0b1f33"/>
+    </linearGradient>
+    <linearGradient id="accA" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="accB" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#12304d" stroke-width="1" opacity="0.4"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="420" fill="url(#bg)"/>
+  <rect width="1200" height="420" fill="url(#grid)"/>
+
+  <circle cx="1020" cy="-70" r="280" fill="#11406a" opacity="0.15"/>
+  <circle cx="130" cy="390" r="220" fill="#0b3d61" opacity="0.2"/>
+
+  <g transform="translate(70 72)">
+    <path d="M100 0l75 30v56c0 57-37 96-75 111C62 182 25 143 25 86V30l75-30z" fill="#081a2f" stroke="url(#accB)" stroke-width="4"/>
+    <circle cx="100" cy="77" r="44" fill="none" stroke="#1f4f75" stroke-width="2"/>
+    <circle cx="100" cy="77" r="30" fill="none" stroke="#2b6e98" stroke-width="1.5"/>
+    <circle cx="100" cy="77" r="6" fill="#93c5fd"/>
+    <path d="M52 116h27l8-19 11 30 12-19h18l8-13h24" fill="none" stroke="url(#accA)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+  </g>
+
+  <g transform="translate(300 78)">
+    <text x="0" y="95" fill="#e2f1ff" font-family="Inter,Segoe UI,Roboto,Arial,sans-serif" font-size="72" font-weight="700" letter-spacing="1">Walker Monitor</text>
+    <text x="0" y="145" fill="#8bb8d8" font-family="Inter,Segoe UI,Roboto,Arial,sans-serif" font-size="29" font-weight="500">
+      Kernel Telemetry. Process Intelligence. Multi-Host Visibility.
+    </text>
+    <g transform="translate(0 182)">
+      <rect x="0" y="0" rx="14" ry="14" width="188" height="40" fill="#0c2338" stroke="#245b84"/>
+      <rect x="203" y="0" rx="14" ry="14" width="194" height="40" fill="#0c2338" stroke="#245b84"/>
+      <rect x="412" y="0" rx="14" ry="14" width="184" height="40" fill="#0c2338" stroke="#245b84"/>
+      <text x="22" y="26" fill="#7dd3fc" font-family="JetBrains Mono,Consolas,monospace" font-size="15">Linux Kernel 4.x+</text>
+      <text x="225" y="26" fill="#7dd3fc" font-family="JetBrains Mono,Consolas,monospace" font-size="15">Agent + Server + UI</text>
+      <text x="435" y="26" fill="#7dd3fc" font-family="JetBrains Mono,Consolas,monospace" font-size="15">Security Hardened</text>
+    </g>
+  </g>
+
+  <path d="M710 338h70l20-50 21 84 24-45h45l16-25h71" fill="none" stroke="url(#accA)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+</svg>

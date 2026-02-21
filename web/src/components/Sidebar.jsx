@@ -5,12 +5,12 @@ import './Sidebar.css';
 const Sidebar = ({ activeView, onViewChange }) => {
     const navItems = [
         { id: 'dashboard', label: 'Dashboard', icon: FiGrid },
-        { id: 'processes', label: 'Processes', icon: FiServer },
-        { id: 'fdt', label: 'File Descriptors', icon: FiFileText },
-        { id: 'network', label: 'Network', icon: FiWifi },
-        { id: 'cpu', label: 'CPU', icon: FiCpu },
-        { id: 'memory', label: 'Memory', icon: FiDatabase },
         { id: 'anomalies', label: 'Anomalies', icon: FiAlertTriangle },
+        { id: 'processes', label: 'Processes', icon: FiServer },
+        { id: 'memory', label: 'Memory', icon: FiDatabase },
+        { id: 'cpu', label: 'CPU', icon: FiCpu },
+        { id: 'network', label: 'Network', icon: FiWifi },
+        { id: 'fdt', label: 'File Descriptors', icon: FiFileText },
     ];
 
     return (

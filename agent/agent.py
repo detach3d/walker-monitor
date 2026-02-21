@@ -6,7 +6,7 @@ Runs on each monitored host to execute walker commands and provide REST API.
 """
 import subprocess
 import re
-import json
+import hmac
 from datetime import datetime
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -18,6 +18,35 @@ CORS(app)
 # Cache for last snapshot
 _last_snapshot = None
 _last_snapshot_time = None
+
+
+def _has_valid_api_key(req):
+    """Validate Bearer token when AGENT_API_KEY is configured."""
+    auth_header = req.headers.get('Authorization', '')
+    bearer_prefix = 'Bearer '
+    if not auth_header.startswith(bearer_prefix):
+        return False
+
+    provided_key = auth_header[len(bearer_prefix):].strip()
+    if not provided_key:
+        return False
+
+    return hmac.compare_digest(provided_key, config.API_KEY)
+
+
+@app.before_request
+def enforce_api_key():
+    """
+    Enforce API-key auth for every request when AGENT_API_KEY is set.
+    Allow unauthenticated OPTIONS preflight for CORS.
+    """
+    if request.method == 'OPTIONS' or not config.AUTH_REQUIRED:
+        return None
+
+    if _has_valid_api_key(request):
+        return None
+
+    return jsonify({'error': 'Unauthorized'}), 401
 
 
 def execute_walker(mode_flag):
@@ -361,9 +390,13 @@ def parse_memory_snapshot(raw_output):
     """
     Parse walker -m output into structured JSON
 
-    Format (two lines per process):
+    Format (two lines per process — userspace):
     PID: 1 | COMM: systemd
     STATE: S | VIRTUAL MEM: 21952 KB | RESIDENT MEM: 11892 KB | SHARED MEM: 8436 KB
+
+    Format (two lines per process — kernel thread, no mm):
+    PID: 2 | COMM: kthreadd
+    STATE: I
     """
     processes = []
     lines = raw_output.split('\n')
@@ -384,6 +417,7 @@ def parse_memory_snapshot(raw_output):
 
             if i + 1 < len(lines):
                 mem_line = lines[i + 1].strip()
+                # Full format with memory info
                 mem_match = re.match(
                     r'^STATE: (\S+) \| VIRTUAL MEM: (\d+) KB \| RESIDENT MEM: (\d+) KB \| SHARED MEM: (\d+) KB$',
                     mem_line
@@ -393,6 +427,17 @@ def parse_memory_snapshot(raw_output):
                     process['virtual_kb'] = int(mem_match.group(2))
                     process['resident_kb'] = int(mem_match.group(3))
                     process['shared_kb'] = int(mem_match.group(4))
+                    processes.append(process)
+                    i += 2
+                    continue
+
+                # State-only format (kernel threads with no mm)
+                state_match = re.match(r'^STATE: (\S+)$', mem_line)
+                if state_match:
+                    process['state'] = state_match.group(1)
+                    process['virtual_kb'] = 0
+                    process['resident_kb'] = 0
+                    process['shared_kb'] = 0
                     processes.append(process)
                     i += 2
                     continue
@@ -559,19 +604,20 @@ def parse_anomalies_snapshot(raw_output):
     Parse walker -a output into structured JSON
 
     Format:
-    PID: 1 | Comm: systemd
+    ******************   PID: 1 | Comm: systemd   ******************
         Thread info: 1 | Comm: systemd
             Executable path: /usr/lib/systemd/systemd
 
         Namespace info:
         mnt:[4026531841]
-        pid:[4026531836]
-        net:[4026531840]
-        uts:[4026531838]
-        ipc:[4026531839]
-        user:[4026531837]
-        cgroup:[4026531835]
+        ...
         depth: [0]
+
+        Time info:
+        start_time (ns since boot): 7000000
+        computed start realtime: 1771691733.533547326
+
+        Cmdline: /sbin/init
     """
     # Namespace inode numbers for the init (root) namespace — collected from PID 1
     init_ns = {}
@@ -581,14 +627,16 @@ def parse_anomalies_snapshot(raw_output):
     current_thread = None
     in_namespace_block = False
     in_privesc_block = False
+    in_time_block = False
+    in_vma_block = False
 
     for line in raw_output.split('\n'):
         stripped = line.strip()
-        if not stripped:
+        if not stripped or stripped == '******************':
             continue
 
-        # Match process line
-        proc_match = re.match(r'^PID: (\d+) \| Comm: (.+)$', stripped)
+        # Match process line (with or without *** wrapper)
+        proc_match = re.match(r'^(?:\*+\s+)?PID: (\d+) \| Comm: (.+?)(?:\s+\*+)?$', stripped)
         if proc_match:
             if current_thread and current_process:
                 current_process['threads'].append(current_thread)
@@ -596,15 +644,21 @@ def parse_anomalies_snapshot(raw_output):
                 processes.append(current_process)
             current_process = {
                 'pid': int(proc_match.group(1)),
-                'comm': proc_match.group(2),
+                'comm': proc_match.group(2).strip(),
                 'threads': [],
                 'flags': [],
                 'namespaces': {},
-                'privesc': None
+                'privesc': None,
+                'start_time_ns': None,
+                'start_realtime': None,
+                'cmdline': None,
+                'vmas': []
             }
             current_thread = None
             in_namespace_block = False
             in_privesc_block = False
+            in_time_block = False
+            in_vma_block = False
             continue
 
         # Match thread line
@@ -710,6 +764,87 @@ def parse_anomalies_snapshot(raw_output):
             if 'privilege escalation' in stripped.lower():
                 continue
 
+        # Time info block
+        if stripped == 'Time info:':
+            in_time_block = True
+            in_namespace_block = False
+            in_privesc_block = False
+            continue
+
+        if in_time_block and current_process:
+            # Match start_time (ns since boot): 7000000
+            boot_match = re.match(r'^start_time \(ns since boot\): (\d+)$', stripped)
+            if boot_match:
+                current_process['start_time_ns'] = int(boot_match.group(1))
+                continue
+
+            # Match computed start realtime: 1771691733.533547326
+            real_match = re.match(r'^computed start realtime: (\d+\.\d+)$', stripped)
+            if real_match:
+                current_process['start_realtime'] = float(real_match.group(1))
+                in_time_block = False
+                continue
+
+        # Cmdline
+        cmdline_match = re.match(r'^Cmdline: (.*)$', stripped)
+        if not cmdline_match:
+            cmdline_match = re.match(r'^Command Line: (.*)$', stripped)
+        if cmdline_match and current_process:
+            cmdline = cmdline_match.group(1).strip()
+            current_process['cmdline'] = cmdline if cmdline else None
+            in_time_block = False
+            in_privesc_block = False
+            continue
+
+        # VMA Info block
+        if stripped == 'VMA Info:':
+            in_vma_block = True
+            in_time_block = False
+            in_privesc_block = False
+            in_namespace_block = False
+            continue
+
+        if in_vma_block and current_process:
+            # Match VMA line: VMA <start>-<end> flags=0x<hex> <rwx> <shared/private> [file=<path>]
+            vma_match = re.match(
+                r'^VMA ([0-9a-f]+)-([0-9a-f]+) flags=0x([0-9a-f]+) ([r-])([w-])([x-]) (shared|private)(?:\s+file=(.+))?$',
+                stripped
+            )
+            if vma_match:
+                start = int(vma_match.group(1), 16)
+                end = int(vma_match.group(2), 16)
+                perms = vma_match.group(4) + vma_match.group(5) + vma_match.group(6)
+                mapping = vma_match.group(7)
+                file_path = vma_match.group(8)
+                size_kb = (end - start) >> 10
+
+                vma_entry = {
+                    'start': vma_match.group(1),
+                    'end': vma_match.group(2),
+                    'perms': perms,
+                    'mapping': mapping,
+                    'size_kb': size_kb,
+                    'file': file_path
+                }
+                current_process['vmas'].append(vma_entry)
+
+                # Flag anonymous executable regions (rwx or wx private — potential shellcode)
+                if 'w' in perms and 'x' in perms and mapping == 'private':
+                    if 'suspicious_vma' not in current_process['flags']:
+                        current_process['flags'].append('suspicious_vma')
+
+                # Flag suspicious file-backed VMAs from unusual paths
+                if file_path and ('x' in perms):
+                    if any(file_path.startswith(p) for p in SUSPICIOUS_PATHS):
+                        if 'suspicious_vma' not in current_process['flags']:
+                            current_process['flags'].append('suspicious_vma')
+
+                continue
+            else:
+                # Non-VMA line means end of VMA block
+                in_vma_block = False
+                # Don't continue — let it fall through to other parsers
+
     # Finalize last entries
     if current_thread and current_process:
         current_process['threads'].append(current_thread)
@@ -750,6 +885,13 @@ def parse_anomalies_snapshot(raw_output):
                     if 'non_default_ns' not in proc['flags']:
                         proc['flags'].append('non_default_ns')
                     break
+
+        # Flag recently started processes (last 5 minutes)
+        if proc.get('start_realtime'):
+            import time
+            age_sec = time.time() - proc['start_realtime']
+            if age_sec < 300 and proc['pid'] > 2:
+                proc['flags'].append('recently_started')
 
     return processes
 
@@ -952,6 +1094,11 @@ def raw_output():
 
 
 if __name__ == '__main__':
-    print(f"Starting Walker Monitor Agent on {config.HOSTNAME}:{config.AGENT_PORT}")
+    print(
+        f"Starting Walker Monitor Agent on "
+        f"{config.HOSTNAME} ({config.AGENT_HOST}:{config.AGENT_PORT})"
+    )
     print(f"Walker binary: {config.WALKER_BINARY}")
-    app.run(host='0.0.0.0', port=config.AGENT_PORT, debug=True)
+    print(f"API key auth: {'enabled' if config.AUTH_REQUIRED else 'disabled'}")
+    print(f"Debug mode: {'enabled' if config.AGENT_DEBUG else 'disabled'}")
+    app.run(host=config.AGENT_HOST, port=config.AGENT_PORT, debug=config.AGENT_DEBUG)

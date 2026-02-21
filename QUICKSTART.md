@@ -1,67 +1,121 @@
 # Walker Monitor - Quick Start
 
-## Running System (Already Set Up)
+This is a fast runbook. For full dependency installation, use `README.md`.
 
-All services are currently running:
+## 0) Prerequisites (already installed)
 
-- ✅ **Agent**: http://localhost:5000
-- ✅ **Server**: http://localhost:3000/api
-- ✅ **Web UI**: http://localhost:3000
+Make sure you already installed all dependencies from `README.md`:
+- kernel headers/build tools
+- Python + venv/pip
+- Node.js 20+
 
-**Access the dashboard:** Open http://localhost:3000 in your browser
+## 1) Build and load walker (Terminal A)
 
-The localhost agent is already registered. Click refresh to see live process data!
-
-## Starting Fresh (After Reboot)
-
-### Terminal 1 - Start Agent
 ```bash
-cd /home/dev/linux/drivers/walker-monitor
-agent/venv/bin/python agent/agent.py
+cd /home/dev/linux/drivers/walker-monitor/system
+make clean
+make
+gcc -Wall walker.c -o walker
+sudo ./load.sh task_walker
+
+# verify
+ls -la /dev/task_walker
+./walker -p | head -20
 ```
 
-### Terminal 2 - Start Server
+## 2) Start agent (Terminal B)
+
 ```bash
-cd /home/dev/linux/drivers/walker-monitor
-node server/server.js
+cd /home/dev/linux/drivers/walker-monitor/agent
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Optional auth (recommended)
+# export AGENT_API_KEY="change-me"
+
+python agent.py
 ```
 
-### Access
-Open http://localhost:3000 in your browser
+Agent defaults:
+- host: `0.0.0.0`
+- port: `5000`
 
-## Adding Remote Hosts
-
-1. On each remote host, copy the `agent/` directory
-2. Install dependencies: `python3 -m venv venv && venv/bin/pip install -r requirements.txt`
-3. Start agent: `venv/bin/python agent.py`
-4. In web UI: Click "Add Host", enter host details
-
-## Test Commands
+## 3) Start server (Terminal C)
 
 ```bash
-# Test agent
-curl http://localhost:5000/health | jq
+cd /home/dev/linux/drivers/walker-monitor/server
+npm install
+npm start
+```
 
-# Test server API
+Server default: `http://localhost:3000`
+
+## 4) Build web UI once (optional in production mode)
+
+```bash
+cd /home/dev/linux/drivers/walker-monitor/web
+npm install
+npm run build
+```
+
+## 5) Add host in UI
+
+Open `http://localhost:3000`.
+
+When adding a host:
+- Host Name: any friendly name
+- Agent URL: `http://<agent-ip>:5000`
+- API Key: same value as `AGENT_API_KEY` (if you set one)
+
+Important:
+- Use a routable IP from the agent host.
+- Do **not** use `localhost`/`127.0.0.1` (blocked by default).
+
+Get agent IP:
+
+```bash
+hostname -I | awk '{print $1}'
+```
+
+## 6) Smoke tests
+
+### Agent
+
+```bash
+# no auth
+curl http://<agent-ip>:5000/health | jq
+
+# with auth
+curl -H "Authorization: Bearer $AGENT_API_KEY" http://<agent-ip>:5000/health | jq
+```
+
+### Server
+
+```bash
 curl http://localhost:3000/api/hosts | jq
-
-# Get process snapshot
-curl http://localhost:3000/api/hosts/localhost/snapshot | jq '.processes | length'
-
-# Get CPU data
-curl http://localhost:3000/api/hosts/localhost/cpu | jq '.processes[0]'
+curl http://localhost:3000/api/hosts/<host-name>/snapshot | jq '.processes | length'
 ```
 
-## Current Status
+## 7) Common issues
 
-```
-✅ Walker driver loaded (/dev/task_walker)
-✅ Python venv created with Flask
-✅ Agent running on port 5000
-✅ Server running on port 3000
-✅ Web UI built and deployed
-✅ Localhost registered and responding
-✅ Tested: 228 processes detected
+### `Can't open device file: /dev/task_walker`
+
+```bash
+cd /home/dev/linux/drivers/walker-monitor/system
+sudo ./load.sh task_walker
 ```
 
-System is fully operational!
+### Agent `{"error":"Unauthorized"}`
+
+Add bearer header:
+
+```bash
+curl -H "Authorization: Bearer $AGENT_API_KEY" http://<agent-ip>:5000/health
+```
+
+### Host stays offline in UI
+
+- Verify server can reach `http://<agent-ip>:5000/health`
+- Verify API key matches (if enabled)
+- Verify host URL is not loopback

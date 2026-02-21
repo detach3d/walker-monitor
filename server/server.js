@@ -8,10 +8,15 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const dns = require('dns').promises;
+const net = require('net');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const AGENT_FETCH_TIMEOUT_MS = Number.parseInt(process.env.AGENT_FETCH_TIMEOUT_MS || '10000', 10);
+const ALLOW_LOOPBACK_AGENT = /^(1|true|yes|on)$/i.test(process.env.ALLOW_LOOPBACK_AGENT || 'false');
+const ALLOW_LINK_LOCAL_AGENT = /^(1|true|yes|on)$/i.test(process.env.ALLOW_LINK_LOCAL_AGENT || 'false');
 
 // Middleware
 app.use(cors());
@@ -33,11 +38,97 @@ const hosts = new Map();
  * }
  */
 
+function disallowedAddressReason(address) {
+    const family = net.isIP(address);
+    if (!family) {
+        return 'invalid IP address';
+    }
+
+    if (family === 4) {
+        const octets = address.split('.').map((item) => Number(item));
+        if (octets.length !== 4 || octets.some((item) => Number.isNaN(item) || item < 0 || item > 255)) {
+            return 'invalid IPv4 address';
+        }
+
+        if (octets[0] === 0) return 'unspecified IPv4 address';
+        if (octets[0] >= 224 && octets[0] <= 239) return 'multicast IPv4 address';
+        if (octets[0] === 255 && octets.slice(1).every((part) => part === 255)) return 'broadcast IPv4 address';
+        if (!ALLOW_LOOPBACK_AGENT && octets[0] === 127) return 'loopback IPv4 address';
+        if (!ALLOW_LINK_LOCAL_AGENT && octets[0] === 169 && octets[1] === 254) return 'link-local IPv4 address';
+
+        return null;
+    }
+
+    const normalized = address.toLowerCase();
+    if (normalized.startsWith('::ffff:')) {
+        return disallowedAddressReason(normalized.substring('::ffff:'.length));
+    }
+
+    if (normalized === '::' || normalized === '0:0:0:0:0:0:0:0') return 'unspecified IPv6 address';
+    if (!ALLOW_LOOPBACK_AGENT && (normalized === '::1' || normalized === '0:0:0:0:0:0:0:1')) {
+        return 'loopback IPv6 address';
+    }
+    if (!ALLOW_LINK_LOCAL_AGENT && (/^fe[89ab]/).test(normalized)) return 'link-local IPv6 address';
+    if ((/^ff/).test(normalized)) return 'multicast IPv6 address';
+
+    return null;
+}
+
+async function normalizeAndValidateAgentUrl(candidateUrl) {
+    if (!candidateUrl || typeof candidateUrl !== 'string') {
+        throw new Error('Agent URL is required');
+    }
+
+    let parsed;
+    try {
+        parsed = new URL(candidateUrl.trim());
+    } catch {
+        throw new Error('Agent URL is invalid');
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('Agent URL protocol must be http or https');
+    }
+    if (!parsed.hostname) {
+        throw new Error('Agent URL must include a hostname');
+    }
+    if (parsed.username || parsed.password) {
+        throw new Error('Agent URL must not include credentials');
+    }
+    if (parsed.search || parsed.hash) {
+        throw new Error('Agent URL must not include query strings or fragments');
+    }
+    if (parsed.pathname && parsed.pathname !== '/') {
+        throw new Error('Agent URL path must be empty (example: http://host:5000)');
+    }
+
+    const resolved = net.isIP(parsed.hostname)
+        ? [{ address: parsed.hostname }]
+        : await dns.lookup(parsed.hostname, { all: true, verbatim: true });
+
+    if (!resolved.length) {
+        throw new Error('Agent hostname did not resolve to any IP address');
+    }
+
+    for (const entry of resolved) {
+        const reason = disallowedAddressReason(entry.address);
+        if (reason) {
+            throw new Error(
+                `Agent URL resolves to disallowed address ${entry.address} (${reason}). ` +
+                `Use ALLOW_LOOPBACK_AGENT/ALLOW_LINK_LOCAL_AGENT only if intentional.`
+            );
+        }
+    }
+
+    return parsed.origin;
+}
+
 // Helper function to fetch from agent
 async function fetchFromAgent(host, endpoint) {
     try {
-        const url = `${host.url}${endpoint}`;
-        const options = {};
+        const safeBaseUrl = await normalizeAndValidateAgentUrl(host.url);
+        const url = `${safeBaseUrl}${endpoint}`;
+        const options = { timeout: AGENT_FETCH_TIMEOUT_MS };
 
         if (host.apiKey) {
             options.headers = {
@@ -62,9 +153,13 @@ async function fetchFromAgent(host, endpoint) {
 
         return { success: true, data };
     } catch (error) {
+        const timeoutError = error.type === 'request-timeout'
+            ? `Agent request timed out after ${AGENT_FETCH_TIMEOUT_MS}ms`
+            : error.message;
+
         // Update host status to offline
         host.status = 'offline';
-        return { success: false, error: error.message };
+        return { success: false, error: timeoutError };
     }
 }
 
@@ -110,19 +205,27 @@ app.get('/api/hosts', (req, res) => {
  */
 app.post('/api/hosts', async (req, res) => {
     const { name, url, apiKey } = req.body;
+    const normalizedName = typeof name === 'string' ? name.trim() : '';
 
-    if (!name || !url) {
+    if (!normalizedName || !url) {
         return res.status(400).json({ error: 'Name and URL are required' });
     }
 
-    if (hosts.has(name)) {
+    if (hosts.has(normalizedName)) {
         return res.status(409).json({ error: 'Host with this name already exists' });
     }
 
+    let normalizedUrl;
+    try {
+        normalizedUrl = await normalizeAndValidateAgentUrl(url);
+    } catch (error) {
+        return res.status(400).json({ error: error.message });
+    }
+
     const host = {
-        name,
-        url: url.replace(/\/$/, ''), // Remove trailing slash
-        apiKey: apiKey || null,
+        name: normalizedName,
+        url: normalizedUrl,
+        apiKey: typeof apiKey === 'string' ? (apiKey.trim() || null) : null,
         status: 'offline',
         lastSeen: null,
         lastSnapshot: null,
@@ -132,7 +235,7 @@ app.post('/api/hosts', async (req, res) => {
     // Test connection
     const healthCheck = await fetchFromAgent(host, '/health');
 
-    hosts.set(name, host);
+    hosts.set(normalizedName, host);
 
     res.status(201).json({
         message: 'Host added successfully',
@@ -160,9 +263,9 @@ app.put('/api/hosts/:hostname', async (req, res) => {
     }
 
     const nextName = (name ?? hostname).trim();
-    const nextUrl = (url ?? host.url).trim().replace(/\/$/, '');
+    const rawNextUrl = (url ?? host.url).trim();
 
-    if (!nextName || !nextUrl) {
+    if (!nextName || !rawNextUrl) {
         return res.status(400).json({ error: 'Name and URL are required' });
     }
 
@@ -170,7 +273,16 @@ app.put('/api/hosts/:hostname', async (req, res) => {
         return res.status(409).json({ error: 'Host with this name already exists' });
     }
 
-    const nextApiKey = typeof apiKey === 'undefined' ? host.apiKey : (apiKey || null);
+    let nextUrl;
+    try {
+        nextUrl = await normalizeAndValidateAgentUrl(rawNextUrl);
+    } catch (error) {
+        return res.status(400).json({ error: error.message });
+    }
+
+    const nextApiKey = typeof apiKey === 'undefined'
+        ? host.apiKey
+        : ((typeof apiKey === 'string' ? apiKey.trim() : '') || null);
 
     const updatedHost = {
         ...host,

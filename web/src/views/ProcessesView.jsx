@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FiChevronDown, FiChevronRight, FiGitBranch, FiX } from 'react-icons/fi';
 import ProcessTreeFlow from '../components/ProcessTreeFlow';
 import { api } from '../api/client';
@@ -63,6 +63,19 @@ const ProcessesView = ({ snapshotData, threadsData, searchQuery, hostname }) => 
     const [graphNodeLoadingPid, setGraphNodeLoadingPid] = useState(null);
     const [graphNodeError, setGraphNodeError] = useState(null);
     const graphProcessCache = useRef(new Map());
+    const graphCacheKey = (host, pid) => `${host}:${pid}`;
+
+    useEffect(() => {
+        // Host switch invalidates prior PID cache and graph context.
+        graphProcessCache.current.clear();
+        setGraphModalOpen(false);
+        setGraphLoading(false);
+        setGraphError(null);
+        setGraphProcess(null);
+        setGraphSelectedProcess(null);
+        setGraphNodeLoadingPid(null);
+        setGraphNodeError(null);
+    }, [hostname]);
 
     const threadMap = useMemo(() => {
         const map = new Map();
@@ -127,6 +140,10 @@ const ProcessesView = ({ snapshotData, threadsData, searchQuery, hostname }) => 
     };
 
     const handleOpenGraph = async (proc) => {
+        if (!hostname) {
+            return;
+        }
+
         setGraphModalOpen(true);
         setGraphLoading(true);
         setGraphError(null);
@@ -139,7 +156,7 @@ const ProcessesView = ({ snapshotData, threadsData, searchQuery, hostname }) => 
             const data = await api.getTree(hostname, proc.pid);
             setGraphProcess(data.process);
             setGraphSelectedProcess(data.process);
-            graphProcessCache.current.set(String(data.process.pid), data.process);
+            graphProcessCache.current.set(graphCacheKey(hostname, data.process.pid), data.process);
         } catch (err) {
             setGraphError(err.message);
         } finally {
@@ -150,7 +167,7 @@ const ProcessesView = ({ snapshotData, threadsData, searchQuery, hostname }) => 
     const handleGraphNodeClick = async (nodeProcess) => {
         if (!hostname || !nodeProcess?.pid) return;
 
-        const pidKey = String(nodeProcess.pid);
+        const pidKey = graphCacheKey(hostname, nodeProcess.pid);
         setGraphNodeError(null);
 
         if (graphProcessCache.current.has(pidKey)) {
@@ -163,7 +180,7 @@ const ProcessesView = ({ snapshotData, threadsData, searchQuery, hostname }) => 
         setGraphNodeLoadingPid(nodeProcess.pid);
         try {
             const data = await api.getTree(hostname, nodeProcess.pid);
-            graphProcessCache.current.set(String(data.process.pid), data.process);
+            graphProcessCache.current.set(graphCacheKey(hostname, data.process.pid), data.process);
             setGraphSelectedProcess(data.process);
         } catch (err) {
             setGraphNodeError(err.message);

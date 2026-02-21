@@ -14,10 +14,90 @@ const FLAG_META = {
     kthread_imposter: { label: 'Kernel Imposter',     severity: 'critical', description: 'Process name mimics a kernel thread but has a userspace binary' },
     non_default_ns:   { label: 'Non-Default NS',      severity: 'medium',   description: 'Process is running in a non-default namespace (container or sandbox)' },
     privesc:          { label: 'Privilege Escalation', severity: 'critical', description: 'Process running as root was spawned by a non-root parent' },
+    suspicious_vma:   { label: 'Suspicious VMA',      severity: 'critical', description: 'Writable + executable memory region detected (potential shellcode injection)' },
+    recently_started: { label: 'Recently Started',    severity: 'low',      description: 'Process started within the last 5 minutes' },
     kernel_thread:    { label: 'Kernel Thread',       severity: 'info',     description: 'No executable path (expected for real kernel threads)' },
 };
 
 const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+
+const formatStartTime = (epochSec) => {
+    if (!epochSec) return null;
+    const d = new Date(epochSec * 1000);
+    return d.toLocaleString();
+};
+
+const formatAge = (epochSec) => {
+    if (!epochSec) return null;
+    const ageSec = Math.floor(Date.now() / 1000 - epochSec);
+    if (ageSec < 60) return `${ageSec}s ago`;
+    if (ageSec < 3600) return `${Math.floor(ageSec / 60)}m ago`;
+    if (ageSec < 86400) return `${Math.floor(ageSec / 3600)}h ago`;
+    return `${Math.floor(ageSec / 86400)}d ago`;
+};
+
+const formatVmaSize = (kb) => {
+    if (kb < 1024) return `${kb} KB`;
+    const mb = kb / 1024;
+    if (mb < 1024) return `${mb.toFixed(1)} MB`;
+    return `${(mb / 1024).toFixed(2)} GB`;
+};
+
+const VmaSection = ({ vmas }) => {
+    const [showVmas, setShowVmas] = useState(false);
+    if (!vmas || vmas.length === 0) return null;
+
+    const execVmas = vmas.filter(v => v.perms.includes('x'));
+    const wxVmas = vmas.filter(v => v.perms.includes('w') && v.perms.includes('x'));
+    const totalSize = vmas.reduce((s, v) => s + (v.size_kb || 0), 0);
+
+    return (
+        <div className="vma-info">
+            <button
+                type="button"
+                className="vma-toggle"
+                onClick={(e) => { e.stopPropagation(); setShowVmas(!showVmas); }}
+            >
+                {showVmas ? <FiChevronDown /> : <FiChevronRight />}
+                VMA Regions ({vmas.length})
+                <span className="vma-summary-stats">
+                    {formatVmaSize(totalSize)} total
+                    {execVmas.length > 0 && <span className="vma-stat-exec">{execVmas.length} exec</span>}
+                    {wxVmas.length > 0 && <span className="vma-stat-wx">{wxVmas.length} W+X</span>}
+                </span>
+            </button>
+            {showVmas && (
+                <div className="vma-table-wrapper">
+                    <table className="vma-table">
+                        <thead>
+                            <tr>
+                                <th>Address Range</th>
+                                <th>Perms</th>
+                                <th>Type</th>
+                                <th>Size</th>
+                                <th>File</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {vmas.map((vma, idx) => {
+                                const isWx = vma.perms.includes('w') && vma.perms.includes('x');
+                                return (
+                                    <tr key={idx} className={isWx ? 'vma-row-wx' : ''}>
+                                        <td className="vma-addr">{vma.start}-{vma.end}</td>
+                                        <td><span className={`vma-perms ${isWx ? 'wx' : ''}`}>{vma.perms}</span></td>
+                                        <td>{vma.mapping}</td>
+                                        <td>{formatVmaSize(vma.size_kb)}</td>
+                                        <td className="vma-file">{vma.file || <span className="vma-anon">[anon]</span>}</td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const AnomaliesView = ({ anomaliesData, searchQuery }) => {
     const [expandedPids, setExpandedPids] = useState(new Set());
@@ -78,7 +158,7 @@ const AnomaliesView = ({ anomaliesData, searchQuery }) => {
     const filteredFlagged = sortedFlagged.filter(filterProc);
     const filteredClean = cleanProcesses.filter(filterProc);
 
-    const criticalCount = flaggedProcesses.filter(p => p.flags.includes('deleted') || p.flags.includes('kthread_imposter') || p.flags.includes('privesc')).length;
+    const criticalCount = flaggedProcesses.filter(p => p.flags.includes('deleted') || p.flags.includes('kthread_imposter') || p.flags.includes('privesc') || p.flags.includes('suspicious_vma')).length;
     const suspiciousCount = flaggedProcesses.filter(p => p.flags.includes('suspicious_path')).length;
 
     const toggleExpand = (pid) => {
@@ -239,6 +319,24 @@ const AnomaliesView = ({ anomaliesData, searchQuery }) => {
                                                     </div>
                                                 </div>
                                             )}
+                                            <div className="process-extra-info">
+                                                {proc.start_realtime && (
+                                                    <div className="extra-info-item">
+                                                        <span className="extra-label">Start Time</span>
+                                                        <span className="extra-value">
+                                                            {formatStartTime(proc.start_realtime)}
+                                                            <span className="extra-age">{formatAge(proc.start_realtime)}</span>
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {proc.cmdline && (
+                                                    <div className="extra-info-item">
+                                                        <span className="extra-label">Command Line</span>
+                                                        <span className="extra-value cmdline">{proc.cmdline}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <VmaSection vmas={proc.vmas} />
                                         </div>
                                     )}
                                 </div>
@@ -322,6 +420,24 @@ const AnomaliesView = ({ anomaliesData, searchQuery }) => {
                                                     </div>
                                                 </div>
                                             )}
+                                            <div className="process-extra-info">
+                                                {proc.start_realtime && (
+                                                    <div className="extra-info-item">
+                                                        <span className="extra-label">Start Time</span>
+                                                        <span className="extra-value">
+                                                            {formatStartTime(proc.start_realtime)}
+                                                            <span className="extra-age">{formatAge(proc.start_realtime)}</span>
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {proc.cmdline && (
+                                                    <div className="extra-info-item">
+                                                        <span className="extra-label">Command Line</span>
+                                                        <span className="extra-value cmdline">{proc.cmdline}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <VmaSection vmas={proc.vmas} />
                                         </div>
                                     )}
                                 </div>

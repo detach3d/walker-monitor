@@ -72,16 +72,20 @@ function App() {
 
     try {
       if (view === 'dashboard') {
-        const [snapshot, ps, fdt, cpu] = await Promise.all([
+        const [snapshot, ps, fdt, cpu, memory, anomalies] = await Promise.all([
           useRefresh ? api.refresh(hostname) : api.getSnapshot(hostname),
           api.getPS(hostname),
           api.getFDT(hostname),
-          api.getCPU(hostname)
+          api.getCPU(hostname),
+          api.getMemory(hostname),
+          api.getAnomalies(hostname)
         ]);
         setSnapshotData(snapshot);
         setPsData(ps);
         setFdtData(fdt);
         setCpuData(cpu);
+        setMemoryData(memory);
+        setAnomaliesData(anomalies);
       } else if (view === 'processes') {
         const [processTree, threadSnapshot] = await Promise.all([
           api.getTreeAll(hostname),
@@ -197,6 +201,8 @@ function App() {
                   psData={psData}
                   fdtData={fdtData}
                   cpuData={cpuData}
+                  memoryData={memoryData}
+                  anomaliesData={anomaliesData}
                   selectedHost={selectedHost}
                   loading={loading}
                   onRefresh={handleRefresh}
