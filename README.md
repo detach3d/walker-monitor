@@ -52,7 +52,7 @@ Browser UI
 ## Clone Repository
 
 ```bash
-git clone <your-repo-url> walker-monitor
+git clone https://github.com/detach3d/walker-monitor.git
 cd walker-monitor
 ```
 
