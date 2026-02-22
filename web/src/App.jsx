@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { FiBell, FiX } from 'react-icons/fi';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import AddHostModal from './components/AddHostModal';
@@ -13,11 +14,16 @@ import AnomaliesView from './views/AnomaliesView';
 import { api } from './api/client';
 import './styles/App.css';
 
+const HOST_STATUS_POLL_MS = 15000;
+
 function App() {
   const [hosts, setHosts] = useState([]);
   const [selectedHost, setSelectedHost] = useState(null);
   const [activeView, setActiveView] = useState('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
+  const [notifications, setNotifications] = useState([]);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   // Modal states
   const [showAddHost, setShowAddHost] = useState(false);
@@ -33,16 +39,134 @@ function App() {
   const [anomaliesData, setAnomaliesData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const hostStatusRef = useRef(new Map());
+  const hostStatusInitializedRef = useRef(false);
+  const pollErrorNotifiedRef = useRef(false);
+  const notificationRef = useRef(null);
 
-  // Load hosts on mount
-  useEffect(() => {
-    loadHosts();
+  const pushNotification = useCallback((type, message) => {
+    setNotifications((prev) => [
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type,
+        message,
+        timestamp: new Date().toISOString()
+      },
+      ...prev
+    ].slice(0, 30));
+    setUnreadNotifications((prev) => prev + 1);
   }, []);
+
+  const dismissNotification = (id) => {
+    setNotifications((prev) => prev.filter((entry) => entry.id !== id));
+  };
+
+  const clearNotifications = () => {
+    setNotifications([]);
+  };
+
+  const summarizeHosts = useCallback((names = []) => {
+    if (names.length <= 4) return names.join(', ');
+    return `${names.slice(0, 4).join(', ')} +${names.length - 4} more`;
+  }, []);
+
+  const reconcileHostStatuses = useCallback((nextHosts) => {
+    const nextMap = new Map(nextHosts.map((host) => [host.name, host.status || 'offline']));
+    const previousMap = hostStatusRef.current;
+
+    if (!hostStatusInitializedRef.current) {
+      hostStatusInitializedRef.current = true;
+      hostStatusRef.current = nextMap;
+
+      const initiallyOffline = nextHosts
+        .filter((host) => (host.status || 'offline') === 'offline')
+        .map((host) => host.name);
+
+      if (initiallyOffline.length > 0) {
+        pushNotification(
+          'warning',
+          `Startup check: ${initiallyOffline.length} agent host(s) offline (${summarizeHosts(initiallyOffline)}).`
+        );
+      }
+      return;
+    }
+
+    for (const [name, status] of nextMap.entries()) {
+      const previousStatus = previousMap.get(name);
+
+      if (!previousStatus) {
+        if (status === 'offline') {
+          pushNotification('warning', `Host "${name}" was added but is currently offline.`);
+        } else {
+          pushNotification('info', `Host "${name}" was added and is online.`);
+        }
+        continue;
+      }
+
+      if (previousStatus !== status) {
+        if (status === 'offline') {
+          pushNotification(
+            'critical',
+            `Agent "${name}" went offline. Validate service health and investigate potential compromise.`
+          );
+        } else {
+          pushNotification('success', `Agent "${name}" is back online.`);
+        }
+      }
+    }
+
+    for (const name of previousMap.keys()) {
+      if (!nextMap.has(name)) {
+        pushNotification('warning', `Host "${name}" was removed from the registry.`);
+      }
+    }
+
+    hostStatusRef.current = nextMap;
+  }, [pushNotification, summarizeHosts]);
+
+  const loadHosts = useCallback(async ({ notify = true } = {}) => {
+    try {
+      const data = await api.getHosts();
+      const nextHosts = data.hosts || [];
+      setHosts(nextHosts);
+
+      if (notify) {
+        if (pollErrorNotifiedRef.current) {
+          pushNotification('success', 'Host status polling recovered.');
+          pollErrorNotifiedRef.current = false;
+        }
+        reconcileHostStatuses(nextHosts);
+      }
+
+      return nextHosts;
+    } catch (err) {
+      console.error('Failed to load hosts:', err);
+      if (notify && !pollErrorNotifiedRef.current) {
+        pushNotification(
+          'critical',
+          `Host status polling failed: ${err.message}. Check server reachability.`
+        );
+        pollErrorNotifiedRef.current = true;
+      }
+      return [];
+    }
+  }, [pushNotification, reconcileHostStatuses]);
+
+  // Load hosts on mount + keep polling status changes
+  useEffect(() => {
+    loadHosts({ notify: true });
+
+    const timerId = setInterval(() => {
+      loadHosts({ notify: true });
+    }, HOST_STATUS_POLL_MS);
+
+    return () => clearInterval(timerId);
+  }, [loadHosts]);
 
   // Load cached host selection
   useEffect(() => {
     const cached = localStorage.getItem('selectedHost');
-    if (cached && hosts.some(h => h.name === cached)) {
+    if (cached && hosts.some((h) => h.name === cached)) {
       setSelectedHost(cached);
     }
   }, [hosts]);
@@ -54,14 +178,23 @@ function App() {
     }
   }, [selectedHost]);
 
-  const loadHosts = async () => {
-    try {
-      const data = await api.getHosts();
-      setHosts(data.hosts || []);
-    } catch (err) {
-      console.error('Failed to load hosts:', err);
-    }
-  };
+  useEffect(() => {
+    if (!isNotificationOpen) return;
+    setUnreadNotifications(0);
+  }, [isNotificationOpen]);
+
+  useEffect(() => {
+    if (!isNotificationOpen) return undefined;
+
+    const onPointerDown = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setIsNotificationOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [isNotificationOpen]);
 
   const loadData = async (hostname, viewOverride = activeView, useRefresh = false) => {
     if (!hostname) return;
@@ -137,11 +270,11 @@ function App() {
   };
 
   const handleHostAdded = () => {
-    loadHosts();
+    loadHosts({ notify: true });
   };
 
   const handleHostRemoved = () => {
-    loadHosts();
+    loadHosts({ notify: true });
     setSelectedHost(null);
     setSnapshotData(null);
     setPsData(null);
@@ -153,13 +286,16 @@ function App() {
   };
 
   const handleHostUpdated = async (oldName, newName) => {
-    await loadHosts();
+    await loadHosts({ notify: true });
 
     if (selectedHost === oldName) {
       setSelectedHost(newName);
       loadData(newName, activeView);
     }
   };
+
+  const offlineHosts = hosts.filter((host) => (host.status || 'offline') === 'offline');
+  const attentionCount = unreadNotifications + offlineHosts.length;
 
   return (
     <div className="app">
@@ -255,6 +391,87 @@ function App() {
             </>
           )}
         </main>
+      </div>
+
+      <div className="notification-fab-wrap" ref={notificationRef}>
+        <button
+          type="button"
+          className={`notification-fab ${offlineHosts.length > 0 ? 'alert' : ''}`}
+          onClick={() => setIsNotificationOpen((prev) => !prev)}
+          aria-label="Open notifications"
+          aria-expanded={isNotificationOpen}
+        >
+          <FiBell />
+          {attentionCount > 0 && (
+            <span className="notification-fab-badge">{attentionCount > 99 ? '99+' : attentionCount}</span>
+          )}
+        </button>
+
+        {isNotificationOpen && (
+          <aside className="notification-hover-panel">
+            <div className="notification-hover-header">
+              <h3>Notifications</h3>
+              <button
+                type="button"
+                className="notification-hover-close"
+                onClick={() => setIsNotificationOpen(false)}
+                aria-label="Close notifications"
+              >
+                <FiX />
+              </button>
+            </div>
+
+            {offlineHosts.length > 0 && (
+              <div className="notification-offline-alert">
+                <div className="notification-offline-title">Offline Agents</div>
+                <div className="notification-offline-text">
+                  {offlineHosts.length} host{offlineHosts.length > 1 ? 's' : ''}: {summarizeHosts(offlineHosts.map((host) => host.name))}
+                </div>
+              </div>
+            )}
+
+            <div className="notification-hover-actions">
+              <button
+                type="button"
+                className="notification-hover-clear"
+                onClick={clearNotifications}
+                disabled={notifications.length === 0}
+              >
+                Clear log
+              </button>
+            </div>
+
+            <div className="notification-hover-list">
+              {notifications.length === 0 && (
+                <div className="notification-hover-empty">
+                  No events yet.
+                </div>
+              )}
+
+              {notifications.slice(0, 12).map((entry) => (
+                <article
+                  key={entry.id}
+                  className={`notification-hover-item notification-${entry.type}`}
+                >
+                  <div className="notification-hover-item-body">
+                    <div className="notification-hover-message">{entry.message}</div>
+                    <div className="notification-hover-time">
+                      {new Date(entry.timestamp).toLocaleTimeString()}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="notification-hover-dismiss"
+                    onClick={() => dismissNotification(entry.id)}
+                    aria-label="Dismiss notification"
+                  >
+                    ×
+                  </button>
+                </article>
+              ))}
+            </div>
+          </aside>
+        )}
       </div>
 
       {showAddHost && (

@@ -41,7 +41,8 @@
 .logo-text {
     font-size: 1rem;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1;
+    white-space: nowrap;
     background: linear-gradient(135deg, var(--accent-primary-light), var(--accent-secondary-light));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;

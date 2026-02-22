@@ -6,20 +6,8 @@ import {
     FiShield,
     FiCheckCircle
 } from 'react-icons/fi';
+import { FLAG_META, SEVERITY_ORDER, classifyAnomalyProcesses } from '../utils/anomalies';
 import './AnomaliesView.css';
-
-const FLAG_META = {
-    deleted:          { label: 'Deleted Binary',      severity: 'critical', description: 'Executable was unlinked from disk while still running' },
-    suspicious_path:  { label: 'Suspicious Path',     severity: 'high',     description: 'Executable loaded from /tmp, /dev/shm, or memfd' },
-    kthread_imposter: { label: 'Kernel Imposter',     severity: 'critical', description: 'Process name mimics a kernel thread but has a userspace binary' },
-    non_default_ns:   { label: 'Non-Default NS',      severity: 'medium',   description: 'Process is running in a non-default namespace (container or sandbox)' },
-    privesc:          { label: 'Privilege Escalation', severity: 'critical', description: 'Process running as root was spawned by a non-root parent' },
-    suspicious_vma:   { label: 'Suspicious VMA',      severity: 'critical', description: 'Writable + executable memory region detected (potential shellcode injection)' },
-    recently_started: { label: 'Recently Started',    severity: 'low',      description: 'Process started within the last 5 minutes' },
-    kernel_thread:    { label: 'Kernel Thread',       severity: 'info',     description: 'No executable path (expected for real kernel threads)' },
-};
-
-const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
 const formatStartTime = (epochSec) => {
     if (!epochSec) return null;
@@ -115,15 +103,11 @@ const AnomaliesView = ({ anomaliesData, searchQuery }) => {
         );
     }
 
-    const allProcesses = anomaliesData.processes || [];
-
-    const flaggedProcesses = allProcesses.filter(p =>
-        p.flags && p.flags.length > 0 && !p.flags.every(f => f === 'kernel_thread')
-    );
-
-    const cleanProcesses = allProcesses.filter(p =>
-        !p.flags || p.flags.length === 0 || p.flags.every(f => f === 'kernel_thread')
-    );
+    const {
+        allProcesses,
+        flaggedProcesses,
+        cleanProcesses
+    } = classifyAnomalyProcesses(anomaliesData.processes || []);
 
     const worstSeverity = (flags) => {
         let worst = 99;
@@ -203,7 +187,7 @@ const AnomaliesView = ({ anomaliesData, searchQuery }) => {
                     <FiCheckCircle className="all-clear-icon" />
                     <div className="all-clear-title">No anomalies detected</div>
                     <div className="all-clear-description">
-                        All {allProcesses.length} processes have valid executable paths.
+                        All {allProcesses.length} processes are currently clean.
                     </div>
                 </div>
             )}

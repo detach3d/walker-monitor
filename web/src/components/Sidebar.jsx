@@ -18,7 +18,7 @@ const Sidebar = ({ activeView, onViewChange }) => {
             <div className="sidebar-header">
                 <div className="sidebar-logo">
                     <img src="/walker-logo.svg" alt="Walker Monitor" className="logo-icon" />
-                    <h1 className="logo-text">Walker<br />Monitor</h1>
+                    <h1 className="logo-text">Walker Monitor</h1>
                 </div>
             </div>
 

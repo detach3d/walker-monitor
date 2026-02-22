@@ -49,9 +49,69 @@ Browser UI
 - Node.js 20+
 - Python 3.8+
 
-## Install All Dependencies
+## Clone Repository
 
-### 1) System Packages (Ubuntu/Debian)
+```bash
+git clone <your-repo-url> walker-monitor
+cd walker-monitor
+```
+
+## Installation Options
+
+Choose either automatic or manual installation.
+
+### Option A: Automatic Install (Scripts)
+
+Use this if you want one-command setup per host role.
+
+#### Agent host bootstrap (system + agent)
+
+```bash
+chmod +x agent/install.sh
+./agent/install.sh
+```
+
+`agent/install.sh`:
+- installs Ubuntu/Debian packages for kernel build + Python
+- builds `system/task_walker.ko` and `system/walker`
+- loads `task_walker` using `system/load.sh`
+- creates/reuses `agent/venv`
+- upgrades `pip` and installs `agent/requirements.txt`
+
+Optional flags:
+
+```bash
+./agent/install.sh --no-system-deps
+./agent/install.sh --no-build-system
+./agent/install.sh --no-load-module
+```
+
+#### Server + web host bootstrap
+
+```bash
+chmod +x web/install.sh
+./web/install.sh
+```
+
+`web/install.sh`:
+- installs Ubuntu/Debian packages required for Node setup
+- installs Node.js 20.x automatically if needed
+- installs `server/` npm dependencies
+- installs `web/` npm dependencies
+- builds web assets (`npm run build`)
+
+Optional flags:
+
+```bash
+./web/install.sh --no-system-deps --no-node-setup
+./web/install.sh --no-server --no-build
+```
+
+### Option B: Manual Install (Step-by-step)
+
+Use this if you want full control over each command.
+
+#### 1) Install system packages (Ubuntu/Debian)
 
 ```bash
 sudo apt update
@@ -62,35 +122,14 @@ sudo apt install -y \
   python3 python3-venv python3-pip
 ```
 
-### 2) Node.js 20+
+#### 2) Install Node.js 20+
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 ```
 
-### 3) Verify Toolchain
-
-```bash
-python3 --version
-node --version
-npm --version
-gcc --version
-ls -ld /lib/modules/$(uname -r)/build
-```
-
-If `/lib/modules/$(uname -r)/build` does not exist, install matching kernel headers and retry.
-
-## Clone Repository
-
-```bash
-git clone <your-repo-url> walker-monitor
-cd walker-monitor
-```
-
-## Build and Install Components
-
-### 1) Build + Load Kernel Module and Walker Binary
+#### 3) Build and load walker components
 
 ```bash
 cd system
@@ -98,27 +137,21 @@ make clean
 make
 gcc -Wall walker.c -o walker
 sudo ./load.sh task_walker
-ls -la /dev/task_walker
-./walker -p | head -20
 cd ..
 ```
 
-### 2) Install Agent Dependencies (Python)
+#### 4) Install agent dependencies
 
 ```bash
 cd agent
 python3 -m venv venv
 source venv/bin/activate
-pip install --upgrade pip
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 cd ..
 ```
 
-Python dependencies installed from `agent/requirements.txt`:
-- `flask>=2.3.0`
-- `flask-cors>=4.0.0`
-
-### 3) Install Server Dependencies (Node)
+#### 5) Install server dependencies
 
 ```bash
 cd server
@@ -126,12 +159,7 @@ npm install
 cd ..
 ```
 
-Server runtime dependencies:
-- `express`
-- `cors`
-- `node-fetch`
-
-### 4) Install Web Dependencies (Node)
+#### 6) Install web dependencies and build
 
 ```bash
 cd web
@@ -140,13 +168,18 @@ npm run build
 cd ..
 ```
 
-Web runtime dependencies:
-- `react`
-- `react-dom`
-- `react-icons`
-- `reactflow`
+## Verify Install
 
-Web dev dependencies include Vite + ESLint toolchain from `web/package.json`.
+```bash
+python3 --version
+node --version
+npm --version
+gcc --version
+ls -ld /lib/modules/$(uname -r)/build
+ls -la /dev/task_walker
+```
+
+If `/lib/modules/$(uname -r)/build` does not exist, install matching kernel headers and rerun `./agent/install.sh`.
 
 ## Start the System
 
@@ -158,11 +191,19 @@ Run agent and server in separate terminals.
 cd /path/to/walker-monitor/agent
 source venv/bin/activate
 
-# Optional: enable API-key auth on all agent endpoints
+# Option A (recommended): enable API-key auth with environment variable
 # export AGENT_API_KEY="change-me"
 
 python agent.py
 ```
+
+Option B: set API key directly in `agent/config.py`:
+
+```python
+STATIC_API_KEY = "change-me"
+```
+
+`AGENT_API_KEY` environment variable overrides `STATIC_API_KEY` if both are set.
 
 Agent config env vars:
 - `AGENT_HOST` (default: `0.0.0.0`)
@@ -192,6 +233,43 @@ Server env vars:
   npm run dev
   ```
   then open `http://localhost:5173`
+
+## Add Management Panel Screenshots
+
+Place screenshot files in `docs/screenshots/` and reference them with relative paths in `README.md`.
+
+Use these exact filenames:
+
+```bash
+mkdir -p docs/screenshots
+# Copy your panel images:
+# cp ~/Pictures/panel-anomalies.png docs/screenshots/panel-anomalies.png
+# cp ~/Pictures/panel-dashboard.png docs/screenshots/panel-dashboard.png
+```
+
+Embedded preview in README:
+
+```md
+### Management Panel - Anomalies
+![Management Panel - Anomalies](docs/screenshots/panel-anomalies.png)
+
+### Management Panel - Dashboard
+![Management Panel - Dashboard](docs/screenshots/panel-dashboard.png)
+```
+
+If you want fixed width in README:
+
+```html
+<img src="docs/screenshots/panel-dashboard.png" alt="Management Panel - Dashboard" width="1200" />
+```
+
+### Management Panel - Anomalies
+
+![Management Panel - Anomalies](docs/screenshots/panel-anomalies.png)
+
+### Management Panel - Dashboard
+
+![Management Panel - Dashboard](docs/screenshots/panel-dashboard.png)
 
 ## Add a Host Correctly
 
@@ -295,6 +373,7 @@ walker-monitor/
 ├── agent/
 │   ├── agent.py
 │   ├── config.py
+│   ├── install.sh
 │   ├── requirements.txt
 │   └── start.sh
 ├── server/
@@ -302,12 +381,13 @@ walker-monitor/
 │   └── package.json
 ├── web/
 │   ├── src/
+│   ├── install.sh
 │   ├── vite.config.js
 │   └── package.json
 ├── docs/
 │   ├── walker-banner.svg
+│   ├── screenshots/
 │   └── ASSETS_LICENSE.md
-├── QUICKSTART.md
 └── README.md
 ```
 

@@ -24,5 +24,10 @@ AGENT_DEBUG = _env_bool('AGENT_DEBUG', False)
 HOSTNAME = socket.gethostname()
 
 # API settings
-API_KEY = os.getenv('AGENT_API_KEY', None)  # Optional API key for authentication
+# Optional static key for local/dev setups (do not commit real secrets)
+# Example: STATIC_API_KEY = "change-me"
+STATIC_API_KEY = None
+
+# Environment variable takes priority over STATIC_API_KEY
+API_KEY = os.getenv('AGENT_API_KEY', STATIC_API_KEY)
 AUTH_REQUIRED = bool(API_KEY)

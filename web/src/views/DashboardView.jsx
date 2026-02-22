@@ -9,6 +9,7 @@ import {
     FiShield,
     FiRefreshCw
 } from 'react-icons/fi';
+import { FLAG_META, SEVERITY_ORDER, classifyAnomalyProcesses } from '../utils/anomalies';
 import './DashboardView.css';
 
 const formatNumber = (value = 0) => Number(value || 0).toLocaleString('en-US');
@@ -44,19 +45,6 @@ const EmptyState = ({ onRefresh }) => (
     </div>
 );
 
-const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-
-const FLAG_META = {
-    deleted: { label: 'Deleted Binary', severity: 'critical' },
-    kthread_imposter: { label: 'Kthread Imposter', severity: 'critical' },
-    privesc: { label: 'Privilege Escalation', severity: 'critical' },
-    suspicious_vma: { label: 'Suspicious VMA', severity: 'critical' },
-    suspicious_path: { label: 'Suspicious Path', severity: 'high' },
-    non_default_ns: { label: 'Non-default NS', severity: 'medium' },
-    recently_started: { label: 'Recently Started', severity: 'low' },
-    kernel_thread: { label: 'Kernel Thread', severity: 'info' },
-};
-
 const DashboardView = ({
     hosts = [],
     snapshotData,
@@ -75,7 +63,11 @@ const DashboardView = ({
     const fdtProcesses = fdtData?.processes || [];
     const cpuProcesses = cpuData?.processes || [];
     const memProcesses = memoryData?.processes || [];
-    const anomProcesses = anomaliesData?.processes || [];
+    const {
+        allProcesses: anomProcesses,
+        flaggedProcesses,
+        cleanProcesses
+    } = classifyAnomalyProcesses(anomaliesData?.processes || []);
 
     const uniquePIDs = new Set([
         ...snapshotProcesses.map((p) => p.pid),
@@ -92,12 +84,6 @@ const DashboardView = ({
         0
     );
 
-    // Anomalies breakdown - only count real anomalies (not info/low flags like kernel_thread, recently_started)
-    const ALERT_SEVERITIES = new Set(['critical', 'high', 'medium']);
-    const flaggedProcesses = anomProcesses.filter(p =>
-        p.flags && p.flags.some(f => ALERT_SEVERITIES.has(FLAG_META[f]?.severity))
-    );
-    const cleanProcesses = anomProcesses.length - flaggedProcesses.length;
     const criticalCount = anomProcesses.filter(p =>
         p.flags?.some(f => FLAG_META[f]?.severity === 'critical')
     ).length;
@@ -252,7 +238,7 @@ const DashboardView = ({
                         </div>
                         <div className="security-body">
                             <span className="security-label">Clean</span>
-                            <span className="security-count">{cleanProcesses}</span>
+                            <span className="security-count">{cleanProcesses.length}</span>
                         </div>
                     </div>
                     <div className="security-card">

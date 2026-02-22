@@ -491,6 +491,237 @@ tbody tr:last-child td {
     font-size: 0.875rem;
 }
 
+/* ===== Floating Notifications ===== */
+.notification-fab-wrap {
+    position: fixed;
+    left: 14px;
+    bottom: 14px;
+    z-index: 240;
+}
+
+.notification-fab {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    border: 1px solid rgba(var(--accent-primary-rgb), 0.35);
+    background: linear-gradient(145deg, rgba(var(--bg-secondary-rgb), 0.94), rgba(var(--bg-primary-rgb), 0.98));
+    color: var(--accent-primary-light);
+    display: grid;
+    place-items: center;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.45);
+    position: relative;
+}
+
+.notification-fab svg {
+    width: 22px;
+    height: 22px;
+}
+
+.notification-fab:hover {
+    transform: translateY(-2px);
+    border-color: rgba(var(--accent-primary-rgb), 0.6);
+    box-shadow: 0 16px 26px rgba(0, 0, 0, 0.5), 0 0 24px rgba(var(--accent-primary-rgb), 0.22);
+}
+
+.notification-fab.alert {
+    border-color: rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+    box-shadow: 0 16px 26px rgba(0, 0, 0, 0.52), 0 0 24px rgba(239, 68, 68, 0.28);
+}
+
+.notification-fab-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: 2px solid var(--bg-primary);
+    background: linear-gradient(145deg, #ef4444, #dc2626);
+    color: #fff;
+    font-size: 0.67rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+}
+
+.notification-hover-panel {
+    position: absolute;
+    left: 0;
+    bottom: 68px;
+    width: min(420px, calc(100vw - 28px));
+    max-height: min(70vh, 560px);
+    display: flex;
+    flex-direction: column;
+    border-radius: 16px;
+    border: 1px solid rgba(var(--accent-primary-rgb), 0.35);
+    background:
+        radial-gradient(120% 140% at -10% -20%, rgba(var(--accent-primary-rgb), 0.18), transparent 52%),
+        rgba(var(--bg-secondary-rgb), 0.97);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+}
+
+.notification-hover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 14px 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.notification-hover-header h3 {
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.notification-hover-close {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-tertiary);
+    display: grid;
+    place-items: center;
+}
+
+.notification-hover-close:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+}
+
+.notification-offline-alert {
+    margin: 10px 12px 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.09);
+}
+
+.notification-offline-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #f9c971;
+    margin-bottom: 2px;
+}
+
+.notification-offline-text {
+    color: #f6db9c;
+    font-size: 0.82rem;
+}
+
+.notification-hover-actions {
+    display: flex;
+    justify-content: flex-end;
+    padding: 10px 12px 0;
+}
+
+.notification-hover-clear {
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-secondary);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+.notification-hover-clear:hover:not(:disabled) {
+    border-color: var(--border-primary);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+}
+
+.notification-hover-list {
+    display: grid;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    overflow-y: auto;
+}
+
+.notification-hover-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: rgba(var(--bg-tertiary-rgb), 0.7);
+    padding: 10px 10px;
+}
+
+.notification-hover-item-body {
+    min-width: 0;
+}
+
+.notification-hover-message {
+    color: var(--text-primary);
+    font-size: 0.82rem;
+}
+
+.notification-hover-time {
+    margin-top: 3px;
+    color: var(--text-tertiary);
+    font-size: 0.72rem;
+}
+
+.notification-hover-dismiss {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-tertiary);
+    border-radius: 8px;
+    width: 24px;
+    height: 24px;
+    line-height: 1;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.notification-hover-dismiss:hover {
+    border-color: var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.notification-hover-empty {
+    text-align: center;
+    color: var(--text-tertiary);
+    font-size: 0.82rem;
+    padding: 18px 10px;
+    border: 1px dashed var(--border-color);
+    border-radius: 10px;
+}
+
+.notification-hover-item.notification-critical {
+    border-color: rgba(239, 68, 68, 0.35);
+    background: rgba(239, 68, 68, 0.09);
+}
+
+.notification-hover-item.notification-warning {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.09);
+}
+
+.notification-hover-item.notification-success {
+    border-color: rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.09);
+}
+
+.notification-hover-item.notification-info {
+    border-color: rgba(167, 139, 250, 0.35);
+    background: rgba(167, 139, 250, 0.09);
+}
+
 /* ===== Modal System ===== */
 .modal-overlay {
     position: fixed;
@@ -663,5 +894,22 @@ tbody tr:last-child td {
 
     .main-content {
         padding: 16px;
+    }
+
+    .notification-fab-wrap {
+        left: 12px;
+        bottom: 12px;
+    }
+
+    .notification-fab {
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+    }
+
+    .notification-hover-panel {
+        width: calc(100vw - 24px);
+        left: 0;
+        max-height: min(72vh, 520px);
     }
 }
