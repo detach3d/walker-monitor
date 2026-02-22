@@ -67,7 +67,11 @@ setup_nodejs() {
   fi
 
   echo "[web/install] Installing Node.js ${NODE_MAJOR}.x via NodeSource"
-  curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | run_as_root -E bash -
+  if [ "${EUID}" -eq 0 ]; then
+    curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
+  else
+    curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | sudo -E bash -
+  fi
   run_as_root apt-get install -y nodejs
 }
 
