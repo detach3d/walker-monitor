@@ -17,6 +17,9 @@ const PORT = process.env.PORT || 3000;
 const AGENT_FETCH_TIMEOUT_MS = Number.parseInt(process.env.AGENT_FETCH_TIMEOUT_MS || '10000', 10);
 const ALLOW_LOOPBACK_AGENT = /^(1|true|yes|on)$/i.test(process.env.ALLOW_LOOPBACK_AGENT || 'false');
 const ALLOW_LINK_LOCAL_AGENT = /^(1|true|yes|on)$/i.test(process.env.ALLOW_LINK_LOCAL_AGENT || 'false');
+const RECENT_START_WINDOW_SEC = 300;
+const SUSPICIOUS_PATH_PREFIXES = ['/tmp/', '/dev/shm/', '/var/tmp/', '/run/shm/'];
+const KTHREAD_NAME_PREFIXES = ['kworker', 'migration', 'ksoftirqd', 'kdevtmpfs', 'rcu_'];
 
 // Middleware
 app.use(cors());
@@ -37,6 +40,140 @@ const hosts = new Map();
  *   reportedHostname: string | null
  * }
  */
+
+function includeFlag(flags, flag) {
+    if (!flags.includes(flag)) {
+        flags.push(flag);
+    }
+}
+
+function startsWithSuspiciousPath(pathValue) {
+    if (typeof pathValue !== 'string' || !pathValue) {
+        return false;
+    }
+    return pathValue.startsWith('memfd:') || SUSPICIOUS_PATH_PREFIXES.some((prefix) => pathValue.startsWith(prefix));
+}
+
+function isKernelThreadName(command) {
+    if (typeof command !== 'string' || !command) {
+        return false;
+    }
+    if (command.startsWith('[')) {
+        return true;
+    }
+    return KTHREAD_NAME_PREFIXES.some((prefix) => command.startsWith(prefix));
+}
+
+function parseInitNamespaces(processes) {
+    const initProcess = processes.find((proc) => proc.pid === 1 && proc.namespaces && typeof proc.namespaces === 'object');
+    if (!initProcess) return null;
+
+    const initNs = {};
+    for (const [nsName, nsInum] of Object.entries(initProcess.namespaces)) {
+        if (nsName !== 'depth') {
+            initNs[nsName] = nsInum;
+        }
+    }
+    return Object.keys(initNs).length ? initNs : null;
+}
+
+function normalizeAnomalyProcesses(processes) {
+    if (!Array.isArray(processes)) {
+        return [];
+    }
+
+    return processes.map((proc) => ({
+        ...proc,
+        flags: [],
+        threads: Array.isArray(proc.threads)
+            ? proc.threads.map((thread) => ({ ...thread, flags: [] }))
+            : [],
+        namespaces: proc.namespaces && typeof proc.namespaces === 'object'
+            ? { ...proc.namespaces }
+            : {},
+        vmas: Array.isArray(proc.vmas)
+            ? proc.vmas.map((vma) => ({ ...vma }))
+            : [],
+        privesc: proc.privesc && typeof proc.privesc === 'object'
+            ? { ...proc.privesc }
+            : proc.privesc ?? null,
+    }));
+}
+
+function applyAnomalyRules(processes) {
+    const normalized = normalizeAnomalyProcesses(processes);
+    const initNs = parseInitNamespaces(normalized);
+    const nowSec = Date.now() / 1000;
+
+    for (const proc of normalized) {
+        for (const thread of proc.threads) {
+            const exePath = thread.exe_path;
+            if (typeof exePath !== 'string' || !exePath) {
+                continue;
+            }
+
+            if (exePath.includes('(deleted)')) {
+                includeFlag(thread.flags, 'deleted');
+                includeFlag(proc.flags, 'deleted');
+            }
+
+            if (startsWithSuspiciousPath(exePath)) {
+                includeFlag(thread.flags, 'suspicious_path');
+                includeFlag(proc.flags, 'suspicious_path');
+            }
+        }
+
+        if (proc.privesc && Number.isFinite(Number(proc.privesc.current_uid))) {
+            includeFlag(proc.flags, 'privesc');
+        }
+
+        for (const vma of proc.vmas) {
+            const perms = typeof vma.perms === 'string' ? vma.perms : '';
+            const mapping = typeof vma.mapping === 'string' ? vma.mapping : '';
+            const filePath = typeof vma.file === 'string' ? vma.file : '';
+
+            if (perms.includes('w') && perms.includes('x') && mapping === 'private') {
+                includeFlag(proc.flags, 'suspicious_vma');
+            }
+
+            if (filePath && perms.includes('x') && SUSPICIOUS_PATH_PREFIXES.some((prefix) => filePath.startsWith(prefix))) {
+                includeFlag(proc.flags, 'suspicious_vma');
+            }
+        }
+
+        const hasExe = proc.threads.some((thread) => Boolean(thread.exe_path));
+
+        if (isKernelThreadName(proc.comm) && hasExe) {
+            includeFlag(proc.flags, 'kthread_imposter');
+        }
+        if (!hasExe) {
+            includeFlag(proc.flags, 'kernel_thread');
+        }
+
+        if (initNs && proc.namespaces && typeof proc.namespaces === 'object') {
+            for (const [nsName, nsInum] of Object.entries(proc.namespaces)) {
+                if (nsName === 'depth') {
+                    continue;
+                }
+
+                if (Object.prototype.hasOwnProperty.call(initNs, nsName) && nsInum !== initNs[nsName]) {
+                    includeFlag(proc.flags, 'non_default_ns');
+                    break;
+                }
+            }
+        }
+
+        const startRealtime = Number(proc.start_realtime);
+        if (Number.isFinite(startRealtime) && Number(proc.pid) > 2) {
+            const ageSec = nowSec - startRealtime;
+            if (ageSec < RECENT_START_WINDOW_SEC) {
+                includeFlag(proc.flags, 'recently_started');
+            }
+        }
+    }
+
+    return normalized;
+}
 
 function disallowedAddressReason(address) {
     const family = net.isIP(address);
@@ -496,7 +633,12 @@ app.get('/api/hosts/:hostname/anomalies', async (req, res) => {
         return res.status(503).json({ error: result.error });
     }
 
-    res.json(result.data);
+    const detectedProcesses = applyAnomalyRules(result.data?.processes);
+
+    res.json({
+        ...result.data,
+        processes: detectedProcesses
+    });
 });
 
 /**

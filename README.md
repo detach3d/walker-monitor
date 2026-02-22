@@ -36,6 +36,7 @@ Monitored Host(s)
 Central Server (Node/Express, default :3000)
   - host registry
   - health checks
+  - anomaly rule engine (server-side)
   - serves web/dist
          |
          v
@@ -279,6 +280,8 @@ curl -H "Authorization: Bearer $AGENT_API_KEY" http://<agent-ip>:5000/memory | j
 curl -H "Authorization: Bearer $AGENT_API_KEY" http://<agent-ip>:5000/anomalies | jq
 ```
 
+Note: agent `/anomalies` returns raw telemetry; anomaly rule tagging is applied on the server API.
+
 ### Server
 
 ```bash
@@ -289,6 +292,7 @@ curl -X POST http://localhost:3000/api/hosts \
   -d '{"name":"host-a","url":"http://<agent-ip>:5000","apiKey":"'"$AGENT_API_KEY"'"}' | jq
 
 curl http://localhost:3000/api/hosts/host-a/snapshot | jq '.processes | length'
+curl http://localhost:3000/api/hosts/host-a/anomalies | jq '.processes[0].flags'
 ```
 
 ## Troubleshooting

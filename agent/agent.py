@@ -597,8 +597,6 @@ def parse_socket_snapshot(raw_output):
     return processes
 
 
-SUSPICIOUS_PATHS = ('/tmp/', '/dev/shm/', '/var/tmp/', '/run/shm/')
-
 def parse_anomalies_snapshot(raw_output):
     """
     Parse walker -a output into structured JSON
@@ -619,9 +617,6 @@ def parse_anomalies_snapshot(raw_output):
 
         Cmdline: /sbin/init
     """
-    # Namespace inode numbers for the init (root) namespace — collected from PID 1
-    init_ns = {}
-
     processes = []
     current_process = None
     current_thread = None
@@ -681,19 +676,6 @@ def parse_anomalies_snapshot(raw_output):
         if exe_match and current_thread:
             path = exe_match.group(1)
             current_thread['exe_path'] = path
-
-            # Flag deleted binaries
-            if '(deleted)' in path:
-                current_thread['flags'].append('deleted')
-                if 'deleted' not in current_process['flags']:
-                    current_process['flags'].append('deleted')
-
-            # Flag suspicious paths
-            if path.startswith('memfd:') or any(path.startswith(p) for p in SUSPICIOUS_PATHS):
-                current_thread['flags'].append('suspicious_path')
-                if 'suspicious_path' not in current_process['flags']:
-                    current_process['flags'].append('suspicious_path')
-
             continue
 
         # Namespace info block
@@ -755,8 +737,6 @@ def parse_anomalies_snapshot(raw_output):
             if current_match:
                 current_process['privesc'] = current_process.get('privesc') or {}
                 current_process['privesc']['current_uid'] = int(current_match.group(3))
-                if 'privesc' not in current_process['flags']:
-                    current_process['flags'].append('privesc')
                 in_privesc_block = False
                 continue
 
@@ -827,18 +807,6 @@ def parse_anomalies_snapshot(raw_output):
                     'file': file_path
                 }
                 current_process['vmas'].append(vma_entry)
-
-                # Flag anonymous executable regions (rwx or wx private — potential shellcode)
-                if 'w' in perms and 'x' in perms and mapping == 'private':
-                    if 'suspicious_vma' not in current_process['flags']:
-                        current_process['flags'].append('suspicious_vma')
-
-                # Flag suspicious file-backed VMAs from unusual paths
-                if file_path and ('x' in perms):
-                    if any(file_path.startswith(p) for p in SUSPICIOUS_PATHS):
-                        if 'suspicious_vma' not in current_process['flags']:
-                            current_process['flags'].append('suspicious_vma')
-
                 continue
             else:
                 # Non-VMA line means end of VMA block
@@ -850,48 +818,6 @@ def parse_anomalies_snapshot(raw_output):
         current_process['threads'].append(current_thread)
     if current_process:
         processes.append(current_process)
-
-    # Collect init namespace inums from PID 1
-    for proc in processes:
-        if proc['pid'] == 1 and proc['namespaces']:
-            init_ns = {k: v for k, v in proc['namespaces'].items() if k != 'depth'}
-            break
-
-    # Flag kernel-thread imposters and detect namespace anomalies
-    for proc in processes:
-        comm = proc['comm']
-        has_exe = any(t.get('exe_path') for t in proc['threads'])
-        is_kthread_name = (
-            comm.startswith('[') or
-            comm.startswith('kworker') or
-            comm.startswith('migration') or
-            comm.startswith('ksoftirqd') or
-            comm.startswith('kdevtmpfs') or
-            comm.startswith('rcu_')
-        )
-        no_exe = not has_exe
-
-        if is_kthread_name and has_exe:
-            proc['flags'].append('kthread_imposter')
-        if no_exe:
-            proc['flags'].append('kernel_thread')
-
-        # Flag processes in non-default namespaces
-        if init_ns and proc['namespaces']:
-            for ns_name, ns_inum in proc['namespaces'].items():
-                if ns_name == 'depth':
-                    continue
-                if ns_name in init_ns and ns_inum != init_ns[ns_name]:
-                    if 'non_default_ns' not in proc['flags']:
-                        proc['flags'].append('non_default_ns')
-                    break
-
-        # Flag recently started processes (last 5 minutes)
-        if proc.get('start_realtime'):
-            import time
-            age_sec = time.time() - proc['start_realtime']
-            if age_sec < 300 and proc['pid'] > 2:
-                proc['flags'].append('recently_started')
 
     return processes
 
