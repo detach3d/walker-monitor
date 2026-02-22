@@ -20,6 +20,8 @@
 #include <linux/mnt_namespace.h>
 #include <linux/utsname.h>
 #include <linux/ipc_namespace.h>
+#include <linux/nsproxy.h>
+#include <linux/pid_namespace.h>
 #include "task_walker.h"
 
 MODULE_LICENSE("GPL");
