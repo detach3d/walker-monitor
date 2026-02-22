@@ -234,34 +234,7 @@ Server env vars:
   ```
   then open `http://localhost:5173`
 
-## Add Management Panel Screenshots
-
-Place screenshot files in `docs/screenshots/` and reference them with relative paths in `README.md`.
-
-Use these exact filenames:
-
-```bash
-mkdir -p docs/screenshots
-# Copy your panel images:
-# cp ~/Pictures/panel-anomalies.png docs/screenshots/panel-anomalies.png
-# cp ~/Pictures/panel-dashboard.png docs/screenshots/panel-dashboard.png
-```
-
-Embedded preview in README:
-
-```md
-### Management Panel - Anomalies
-![Management Panel - Anomalies](docs/screenshots/panel-anomalies.png)
-
-### Management Panel - Dashboard
-![Management Panel - Dashboard](docs/screenshots/panel-dashboard.png)
-```
-
-If you want fixed width in README:
-
-```html
-<img src="docs/screenshots/panel-dashboard.png" alt="Management Panel - Dashboard" width="1200" />
-```
+## Management Panel Screenshots
 
 ### Management Panel - Anomalies
 
